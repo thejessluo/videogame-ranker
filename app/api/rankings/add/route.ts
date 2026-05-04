@@ -9,6 +9,8 @@ import { resolveRankingDbCtx } from "@/lib/ranking/request-actor";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import type { RankingDbCtx } from "@/lib/ranking/db-ctx";
 
+export const dynamic = "force-dynamic";
+
 type AddBody = {
   mode: "rawg" | "manual";
   broadRating: BroadRating;

@@ -4,7 +4,15 @@ import { ensureGuestIdForApi, guestIdHeaders } from "@/lib/guest-client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function RerankButton({ gameId, inline }: { gameId: string; inline?: boolean }) {
+export function RemoveFromRankingButton({
+  gameId,
+  gameName,
+  inline,
+}: {
+  gameId: string;
+  gameName: string;
+  inline?: boolean;
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -12,13 +20,21 @@ export function RerankButton({ gameId, inline }: { gameId: string; inline?: bool
   const inner = (
     <>
       <button
-        className="btn btn-secondary !py-1 !px-2 text-xs"
+        type="button"
+        className="btn btn-secondary !py-1 !px-2 text-xs text-red-200/90 ring-1 ring-red-400/30 hover:bg-red-950/40"
         disabled={loading}
         onClick={async () => {
+          if (
+            !window.confirm(
+              `Remove “${gameName}” from your ranking? This cannot be undone.`,
+            )
+          ) {
+            return;
+          }
           setLoading(true);
           setError(null);
           await ensureGuestIdForApi();
-          const response = await fetch("/api/rankings/rerank", {
+          const response = await fetch("/api/rankings/remove", {
             method: "POST",
             credentials: "include",
             headers: {
@@ -29,23 +45,14 @@ export function RerankButton({ gameId, inline }: { gameId: string; inline?: bool
           });
           const payload = await response.json().catch(() => ({}));
           setLoading(false);
-
           if (!response.ok) {
-            setError(payload.error ?? "Could not start re-rank.");
+            setError(payload.error ?? "Could not remove game.");
             return;
           }
-
-          if (payload.status === "reranked_directly") {
-            router.refresh();
-            return;
-          }
-
-          if (payload.sessionId) {
-            router.push(`/compare?session=${payload.sessionId}`);
-          }
+          router.refresh();
         }}
       >
-        {loading ? "Starting..." : "Re-rank"}
+        {loading ? "Removing…" : "Remove"}
       </button>
       {error ? <span className="text-xs text-red-300">{error}</span> : null}
     </>
@@ -55,5 +62,5 @@ export function RerankButton({ gameId, inline }: { gameId: string; inline?: bool
     return <span className="inline-flex flex-wrap items-center gap-2">{inner}</span>;
   }
 
-  return <div className="mt-2 flex items-center gap-2">{inner}</div>;
+  return <div className="mt-2 flex flex-wrap items-center gap-2">{inner}</div>;
 }

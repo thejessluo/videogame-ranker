@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ensureGuestIdForApi, guestIdHeaders } from "@/lib/guest-client";
 
 type GameCard = {
   id: string;
@@ -37,7 +38,11 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
   const [followupLoading, setFollowupLoading] = useState(false);
 
   const loadMatchup = useCallback(async () => {
-    const response = await fetch(`/api/rankings/session?sessionId=${sessionId}`);
+    await ensureGuestIdForApi();
+    const response = await fetch(`/api/rankings/session?sessionId=${sessionId}`, {
+      credentials: "include",
+      headers: { ...guestIdHeaders() },
+    });
     const payload = await response.json();
     if (!response.ok) {
       setState({
@@ -102,10 +107,15 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
 
   async function vote(preferred: "new" | "existing" | "skip") {
     setSubmitting(true);
+    await ensureGuestIdForApi();
 
     const response = await fetch("/api/rankings/session", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...guestIdHeaders(),
+      },
       body: JSON.stringify({
         sessionId,
         preferred,
@@ -175,9 +185,14 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
               disabled={followupLoading}
               onClick={async () => {
                 setFollowupLoading(true);
+                await ensureGuestIdForApi();
                 const response = await fetch("/api/rankings/session/followup", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...guestIdHeaders(),
+                  },
                   body: JSON.stringify({
                     sessionId,
                     action: "rank_globally_anyway",
@@ -207,9 +222,14 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
               disabled={followupLoading}
               onClick={async () => {
                 setFollowupLoading(true);
+                await ensureGuestIdForApi();
                 const response = await fetch("/api/rankings/session/followup", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...guestIdHeaders(),
+                  },
                   body: JSON.stringify({
                     sessionId,
                     action: "save_unranked",

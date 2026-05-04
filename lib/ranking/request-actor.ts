@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { VIDEOGAME_GUEST_COOKIE } from "@/lib/constants";
 import { isValidGuestId } from "@/lib/guest-id";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
@@ -15,8 +15,15 @@ export async function resolveRankingDbCtx(): Promise<RankingDbCtx | null> {
   }
 
   const cookieStore = await cookies();
-  const guestId = cookieStore.get(VIDEOGAME_GUEST_COOKIE)?.value;
-  if (!isValidGuestId(guestId)) {
+  const headerStore = await headers();
+  const headerGuest = headerStore.get("x-videogame-guest-id")?.trim();
+  const cookieGuest = cookieStore.get(VIDEOGAME_GUEST_COOKIE)?.value;
+  const guestId = isValidGuestId(cookieGuest)
+    ? cookieGuest
+    : isValidGuestId(headerGuest)
+      ? headerGuest
+      : null;
+  if (!guestId) {
     return null;
   }
 
