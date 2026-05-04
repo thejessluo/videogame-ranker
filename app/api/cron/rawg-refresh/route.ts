@@ -4,33 +4,32 @@ import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+function isAuthorized(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+
+  const authHeader = request.headers.get("authorization");
+  return authHeader === `Bearer ${secret}`;
+}
+
+export async function GET(request: Request) {
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
   try {
     const supabase = await createClient();
-    const body = (await request.json().catch(() => ({}))) as {
-      genreSlug?: string;
-      genreSlugs?: string[];
-      genresLimit?: number;
-      perGenreLimit?: number;
-    };
-    const perGenreLimit = Math.min(Math.max(body.perGenreLimit ?? 30, 5), 50);
-    const genresLimit = Math.min(Math.max(body.genresLimit ?? 1, 1), 16);
-    const genreSlugs = body.genreSlug
-      ? [body.genreSlug]
-      : body.genreSlugs?.length
-        ? body.genreSlugs
-        : undefined;
-
     const result = await syncRawgCatalog({
       supabase,
-      genreSlugs,
-      genresLimit,
-      perGenreLimit,
+      genresLimit: 10,
+      perGenreLimit: 25,
     });
 
     return NextResponse.json({
+      ok: true,
       syncedGames: result.syncedGames,
       syncedGenres: result.syncedGenres,
+      refreshedAt: new Date().toISOString(),
     });
   } catch (error) {
     return NextResponse.json(

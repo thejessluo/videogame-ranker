@@ -43,9 +43,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## API Endpoints
 
-- `POST /api/rawg/sync` body: `{ "genreSlug": "action", "limit": 40 }`
+- `POST /api/rawg/sync` body: `{ "genreSlug": "action", "perGenreLimit": 40 }`
+- `POST /api/rawg/sync` body: `{ "genresLimit": 8, "perGenreLimit": 30 }`
 - `GET /api/matchup?genre=action`
 - `POST /api/vote` body: `{ "genreSlug", "gameAId", "gameBId", "winnerGameId" }`
+
+## Scheduled RAWG Refresh
+
+- Vercel cron is defined in `vercel.json` for daily refresh.
+- Set `CRON_SECRET` in your environment.
+- Cron request must include `Authorization: Bearer <CRON_SECRET>`.
+- Endpoint: `GET /api/cron/rawg-refresh`.
 
 ## MVP Flow
 

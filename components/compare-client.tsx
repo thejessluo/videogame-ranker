@@ -33,7 +33,7 @@ export function CompareClient({ genreSlug }: { genreSlug: string }) {
       await fetch("/api/rawg/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ genreSlug, limit: 40 }),
+        body: JSON.stringify({ genreSlug, perGenreLimit: 40 }),
       });
       response = await fetch(`/api/matchup?genre=${encodeURIComponent(genreSlug)}`);
     }
