@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { formatAuthErrorMessage } from "@/lib/auth-error-message";
+import { getPublicSiteOrigin } from "@/lib/site-origin";
 
 type Mode = "signin" | "signup";
 
@@ -12,6 +14,7 @@ export function AuthForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageVariant, setMessageVariant] = useState<"success" | "error" | "warning">("error");
   const router = useRouter();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -24,12 +27,21 @@ export function AuthForm() {
       const action =
         mode === "signin"
           ? supabase.auth.signInWithPassword({ email, password })
-          : supabase.auth.signUp({ email, password });
+          : supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                emailRedirectTo: `${getPublicSiteOrigin()}/auth`,
+              },
+            });
       const { error } = await action;
 
       if (error) {
-        setMessage(error.message);
+        const { text, variant } = formatAuthErrorMessage(error.message);
+        setMessageVariant(variant);
+        setMessage(text);
       } else if (mode === "signup") {
+        setMessageVariant("success");
         setMessage("Account created. If email confirmation is enabled, check inbox.");
       } else {
         router.push("/");
@@ -70,7 +82,19 @@ export function AuthForm() {
         />
       </div>
 
-      {message ? <p className="mt-4 text-sm text-white/75">{message}</p> : null}
+      {message ? (
+        <p
+          className={`mt-4 whitespace-pre-line text-sm ${
+            messageVariant === "success"
+              ? "text-emerald-300/90"
+              : messageVariant === "warning"
+                ? "text-amber-200/90"
+                : "text-red-300/90"
+          }`}
+        >
+          {message}
+        </p>
+      ) : null}
 
       <button
         type="submit"
@@ -86,6 +110,7 @@ export function AuthForm() {
         onClick={() => {
           setMode((value) => (value === "signin" ? "signup" : "signin"));
           setMessage(null);
+          setMessageVariant("error");
         }}
       >
         {mode === "signin" ? "Need an account?" : "Already have an account?"}

@@ -6,6 +6,11 @@ alter table public.user_game_rankings enable row level security;
 alter table public.ranking_insert_sessions enable row level security;
 alter table public.ranking_comparisons enable row level security;
 alter table public.user_game_bookmarks enable row level security;
+alter table public.friend_requests enable row level security;
+alter table public.friendships enable row level security;
+alter table public.guest_game_rankings enable row level security;
+alter table public.guest_ranking_insert_sessions enable row level security;
+alter table public.guest_ranking_comparisons enable row level security;
 
 drop policy if exists "games_select_all_authenticated" on public.games;
 create policy "games_select_all_authenticated"
@@ -29,12 +34,15 @@ create policy "games_update_all_authenticated"
   using (true)
   with check (true);
 
-drop policy if exists "user_profiles_select_own" on public.user_profiles;
-create policy "user_profiles_select_own"
+drop policy if exists "user_profiles_select_own_or_friend" on public.user_profiles;
+create policy "user_profiles_select_own_or_friend"
   on public.user_profiles
   for select
   to authenticated
-  using ((select auth.uid()) = id);
+  using (
+    (select auth.uid()) = id
+    or public.are_friends((select auth.uid()), id)
+  );
 
 drop policy if exists "user_profiles_update_own" on public.user_profiles;
 create policy "user_profiles_update_own"
@@ -44,12 +52,15 @@ create policy "user_profiles_update_own"
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
 
-drop policy if exists "comparisons_select_own" on public.comparisons;
-create policy "comparisons_select_own"
+drop policy if exists "comparisons_select_own_or_friend" on public.comparisons;
+create policy "comparisons_select_own_or_friend"
   on public.comparisons
   for select
   to authenticated
-  using ((select auth.uid()) = user_id);
+  using (
+    (select auth.uid()) = user_id
+    or public.are_friends((select auth.uid()), user_id)
+  );
 
 drop policy if exists "comparisons_insert_own" on public.comparisons;
 create policy "comparisons_insert_own"
@@ -58,12 +69,15 @@ create policy "comparisons_insert_own"
   to authenticated
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "genre_ratings_select_own" on public.genre_ratings;
-create policy "genre_ratings_select_own"
+drop policy if exists "genre_ratings_select_own_or_friend" on public.genre_ratings;
+create policy "genre_ratings_select_own_or_friend"
   on public.genre_ratings
   for select
   to authenticated
-  using ((select auth.uid()) = user_id);
+  using (
+    (select auth.uid()) = user_id
+    or public.are_friends((select auth.uid()), user_id)
+  );
 
 drop policy if exists "genre_ratings_insert_own" on public.genre_ratings;
 create policy "genre_ratings_insert_own"
@@ -80,34 +94,167 @@ create policy "genre_ratings_update_own"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "user_game_rankings_all_own" on public.user_game_rankings;
-create policy "user_game_rankings_all_own"
+drop policy if exists "user_game_rankings_select_own_or_friend" on public.user_game_rankings;
+create policy "user_game_rankings_select_own_or_friend"
   on public.user_game_rankings
-  for all
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    or public.are_friends((select auth.uid()), user_id)
+  );
+
+drop policy if exists "user_game_rankings_insert_own" on public.user_game_rankings;
+create policy "user_game_rankings_insert_own"
+  on public.user_game_rankings
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "user_game_rankings_update_own" on public.user_game_rankings;
+create policy "user_game_rankings_update_own"
+  on public.user_game_rankings
+  for update
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "ranking_insert_sessions_all_own" on public.ranking_insert_sessions;
-create policy "ranking_insert_sessions_all_own"
+drop policy if exists "user_game_rankings_delete_own" on public.user_game_rankings;
+create policy "user_game_rankings_delete_own"
+  on public.user_game_rankings
+  for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "ranking_insert_sessions_select_own_or_friend" on public.ranking_insert_sessions;
+create policy "ranking_insert_sessions_select_own_or_friend"
   on public.ranking_insert_sessions
-  for all
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    or public.are_friends((select auth.uid()), user_id)
+  );
+
+drop policy if exists "ranking_insert_sessions_insert_own" on public.ranking_insert_sessions;
+create policy "ranking_insert_sessions_insert_own"
+  on public.ranking_insert_sessions
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "ranking_insert_sessions_update_own" on public.ranking_insert_sessions;
+create policy "ranking_insert_sessions_update_own"
+  on public.ranking_insert_sessions
+  for update
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "ranking_comparisons_all_own" on public.ranking_comparisons;
-create policy "ranking_comparisons_all_own"
+drop policy if exists "ranking_insert_sessions_delete_own" on public.ranking_insert_sessions;
+create policy "ranking_insert_sessions_delete_own"
+  on public.ranking_insert_sessions
+  for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "ranking_comparisons_select_own_or_friend" on public.ranking_comparisons;
+create policy "ranking_comparisons_select_own_or_friend"
   on public.ranking_comparisons
-  for all
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    or public.are_friends((select auth.uid()), user_id)
+  );
+
+drop policy if exists "ranking_comparisons_insert_own" on public.ranking_comparisons;
+create policy "ranking_comparisons_insert_own"
+  on public.ranking_comparisons
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "ranking_comparisons_delete_own" on public.ranking_comparisons;
+create policy "ranking_comparisons_delete_own"
+  on public.ranking_comparisons
+  for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "user_game_bookmarks_select_own_or_friend" on public.user_game_bookmarks;
+create policy "user_game_bookmarks_select_own_or_friend"
+  on public.user_game_bookmarks
+  for select
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    or public.are_friends((select auth.uid()), user_id)
+  );
+
+drop policy if exists "user_game_bookmarks_insert_own" on public.user_game_bookmarks;
+create policy "user_game_bookmarks_insert_own"
+  on public.user_game_bookmarks
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "user_game_bookmarks_update_own" on public.user_game_bookmarks;
+create policy "user_game_bookmarks_update_own"
+  on public.user_game_bookmarks
+  for update
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-drop policy if exists "user_game_bookmarks_all_own" on public.user_game_bookmarks;
-create policy "user_game_bookmarks_all_own"
+drop policy if exists "user_game_bookmarks_delete_own" on public.user_game_bookmarks;
+create policy "user_game_bookmarks_delete_own"
   on public.user_game_bookmarks
-  for all
+  for delete
   to authenticated
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "friend_requests_select_parties" on public.friend_requests;
+create policy "friend_requests_select_parties"
+  on public.friend_requests
+  for select
+  to authenticated
+  using ((select auth.uid()) in (from_user_id, to_user_id));
+
+drop policy if exists "friend_requests_insert_sender" on public.friend_requests;
+create policy "friend_requests_insert_sender"
+  on public.friend_requests
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = from_user_id);
+
+drop policy if exists "friend_requests_update_parties" on public.friend_requests;
+create policy "friend_requests_update_parties"
+  on public.friend_requests
+  for update
+  to authenticated
+  using ((select auth.uid()) in (from_user_id, to_user_id))
+  with check ((select auth.uid()) in (from_user_id, to_user_id));
+
+drop policy if exists "friendships_select_members" on public.friendships;
+create policy "friendships_select_members"
+  on public.friendships
+  for select
+  to authenticated
+  using ((select auth.uid()) in (user_a_id, user_b_id));
+
+drop policy if exists "friendships_insert_members" on public.friendships;
+create policy "friendships_insert_members"
+  on public.friendships
+  for insert
+  to authenticated
+  with check ((select auth.uid()) in (user_a_id, user_b_id));
+
+drop policy if exists "friendships_delete_members" on public.friendships;
+create policy "friendships_delete_members"
+  on public.friendships
+  for delete
+  to authenticated
+  using ((select auth.uid()) in (user_a_id, user_b_id));
+
+-- Guest tables: no policies — only the service role (server) may access them.

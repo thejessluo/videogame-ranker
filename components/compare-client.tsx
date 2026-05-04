@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type GameCard = {
   id: string;
@@ -24,7 +24,7 @@ type State = {
 
 export function CompareClient({ sessionId }: { sessionId: string }) {
   const [state, setState] = useState<State>({
-    loading: false,
+    loading: true,
     error: null,
     done: false,
     resultMessage: null,
@@ -93,6 +93,12 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
       progress: payload.progress ?? null,
     });
   }, [sessionId]);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void loadMatchup();
+    });
+  }, [loadMatchup]);
 
   async function vote(preferred: "new" | "existing" | "skip") {
     setSubmitting(true);
@@ -240,17 +246,15 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
   if (!state.newGame || !state.comparedGame) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-white/70">
-          Tap below to start your next comparison.
-        </p>
+        <p className="text-sm text-white/70">No matchup loaded.</p>
         <button
-          className="btn btn-primary"
+          className="btn btn-secondary"
           onClick={async () => {
             setState((previous) => ({ ...previous, loading: true, error: null }));
             await loadMatchup();
           }}
         >
-          Start comparisons
+          Retry
         </button>
       </div>
     );

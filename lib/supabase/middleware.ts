@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { VIDEOGAME_GUEST_COOKIE } from "@/lib/constants";
+import { isValidGuestId } from "@/lib/guest-id";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
@@ -34,7 +36,23 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    const existingGuest = request.cookies.get(VIDEOGAME_GUEST_COOKIE)?.value;
+    if (!isValidGuestId(existingGuest)) {
+      const guestId = crypto.randomUUID();
+      response.cookies.set(VIDEOGAME_GUEST_COOKIE, guestId, {
+        httpOnly: true,
+        maxAge: 60 * 60 * 24 * 400,
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      });
+    }
+  }
 
   return response;
 }

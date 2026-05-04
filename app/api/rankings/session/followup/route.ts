@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { initialBoundsFromSentiment, scoreFromRank } from "@/lib/ranking/beli";
-import { createClient } from "@/lib/supabase/server";
+import { displayScoresForOrderedList, initialBoundsFromSentiment } from "@/lib/ranking/beli";
+import { resolveRankingDbCtx } from "@/lib/ranking/request-actor";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 type FollowupBody = {
   sessionId: string;
@@ -17,49 +18,64 @@ type RankedRow = {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const ctx = await resolveRankingDbCtx();
+    if (!ctx) {
+      const admin = createAdminClientOrNull();
+      if (!admin) {
+        return NextResponse.json(
+          {
+            error:
+              "Sign in to continue, or set SUPABASE_SERVICE_ROLE_KEY on the server for anonymous rankings.",
+          },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
 
     const body = (await request.json()) as FollowupBody;
     if (!body.sessionId || !body.action) {
       return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
     }
 
-    const { data: session, error: sessionError } = await supabase
-      .from("ranking_insert_sessions")
+    const rankingsTable = ctx.mode === "user" ? "user_game_rankings" : "guest_game_rankings";
+    const sessionsTable = ctx.mode === "user" ? "ranking_insert_sessions" : "guest_ranking_insert_sessions";
+    const ownerCol = ctx.mode === "user" ? "user_id" : "guest_id";
+    const ownerId = ctx.mode === "user" ? ctx.userId : ctx.guestId;
+    const ownerRow = ctx.mode === "user" ? { user_id: ctx.userId } : { guest_id: ctx.guestId };
+
+    const { data: session, error: sessionError } = await ctx.client
+      .from(sessionsTable)
       .select("id,game_id,broad_rating,status,notes,tags,completed")
       .eq("id", body.sessionId)
-      .eq("user_id", user.id)
+      .eq(ownerCol, ownerId)
       .single();
     if (sessionError || !session) {
       return NextResponse.json({ error: sessionError?.message ?? "Session not found." }, { status: 404 });
     }
 
     if (body.action === "save_unranked") {
-      await supabase
-        .from("ranking_insert_sessions")
+      await ctx.client
+        .from(sessionsTable)
         .update({ completed: true, updated_at: new Date().toISOString() })
         .eq("id", session.id);
       return NextResponse.json({ status: "saved_unranked" });
     }
 
-    const { data: existing } = await supabase
-      .from("user_game_rankings")
+    const { data: existing } = await ctx.client
+      .from(rankingsTable)
       .select("id")
-      .eq("user_id", user.id)
+      .eq(ownerCol, ownerId)
       .eq("list_scope", "global")
       .eq("list_key", "all")
       .eq("game_id", session.game_id)
       .maybeSingle();
     if (existing) return NextResponse.json({ status: "already_ranked" });
 
-    const { data: rankedRows, error: rankedError } = await supabase
-      .from("user_game_rankings")
+    const { data: rankedRows, error: rankedError } = await ctx.client
+      .from(rankingsTable)
       .select("game_id,status,broad_rating,notes,tags")
-      .eq("user_id", user.id)
+      .eq(ownerCol, ownerId)
       .eq("list_scope", "global")
       .eq("list_key", "all")
       .order("rank_position", { ascending: true });
@@ -84,13 +100,14 @@ export async function POST(request: Request) {
       tags: session.tags ?? [],
     });
 
+    const scores = displayScoresForOrderedList(finalList);
     const payload = finalList.map((row, index) => ({
-      user_id: user.id,
+      ...ownerRow,
       list_scope: "global",
       list_key: "all",
       game_id: row.game_id,
       rank_position: index + 1,
-      score: scoreFromRank(index, finalList.length),
+      score: scores[index]!,
       status: row.status ?? "played",
       broad_rating: row.broad_rating ?? "okay",
       notes: row.notes ?? null,
@@ -98,21 +115,19 @@ export async function POST(request: Request) {
       updated_at: new Date().toISOString(),
     }));
 
-    const { error: deleteError } = await supabase
-      .from("user_game_rankings")
+    const { error: deleteError } = await ctx.client
+      .from(rankingsTable)
       .delete()
-      .eq("user_id", user.id)
+      .eq(ownerCol, ownerId)
       .eq("list_scope", "global")
       .eq("list_key", "all");
     if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
 
-    const { error: insertError } = await supabase
-      .from("user_game_rankings")
-      .insert(payload);
+    const { error: insertError } = await ctx.client.from(rankingsTable).insert(payload);
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
-    await supabase
-      .from("ranking_insert_sessions")
+    await ctx.client
+      .from(sessionsTable)
       .update({ completed: true, updated_at: new Date().toISOString() })
       .eq("id", session.id);
 
