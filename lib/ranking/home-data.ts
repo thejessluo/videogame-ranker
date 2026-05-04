@@ -13,12 +13,14 @@ export type HomeRankingRow = {
         name: string;
         cover_url: string | null;
         genres_json: Array<{ name?: string }>;
+        rawg_id: number | null;
       }>
     | {
         id: string;
         name: string;
         cover_url: string | null;
         genres_json: Array<{ name?: string }>;
+        rawg_id: number | null;
       }
     | null;
 };
@@ -36,7 +38,7 @@ export async function fetchMyRankings(limit?: number): Promise<HomeRankingRow[]>
   let query = ctx.client
     .from(rankingsTable)
     .select(
-      "rank_position,score,status,broad_rating,notes,tags,game:games(id,name,cover_url,genres_json)",
+      "rank_position,score,status,broad_rating,notes,tags,game:games(id,name,cover_url,genres_json,rawg_id)",
     )
     .eq(ownerCol, ownerId)
     .eq("list_scope", "global")
