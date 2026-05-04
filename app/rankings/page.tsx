@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { RerankButton } from "@/components/rerank-button";
+import { AuthHeader } from "@/components/auth-header";
+import { fetchMyRankings, type HomeRankingRow } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
 
 type RankingsPageProps = {
@@ -10,6 +11,12 @@ type RankingsPageProps = {
   }>;
 };
 
+function readGame(value: unknown) {
+  if (Array.isArray(value)) return value[0] ?? null;
+  if (value && typeof value === "object") return value as Record<string, unknown>;
+  return null;
+}
+
 export default async function RankingsPage({ searchParams }: RankingsPageProps) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -17,27 +24,14 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/auth");
-  }
-
-  const { data: rankingRows } = await supabase
-    .from("user_game_rankings")
-    .select(
-      "rank_position,score,status,broad_rating,notes,tags,game:games(id,name,cover_url,genres_json)",
-    )
-    .eq("user_id", user.id)
-    .eq("list_scope", "global")
-    .eq("list_key", "all")
-    .order("rank_position", { ascending: true });
+  const rankingRows = (await fetchMyRankings()) as HomeRankingRow[];
 
   const allGenres = Array.from(
     new Set(
-      (rankingRows ?? [])
+      rankingRows
         .flatMap((row) => {
-          const game = Array.isArray(row.game) ? row.game[0] : row.game;
-          return (game as { genres_json?: Array<{ name?: string }> } | null)
-            ?.genres_json ?? [];
+          const game = readGame(row.game) as { genres_json?: Array<{ name?: string }> } | null;
+          return game?.genres_json ?? [];
         })
         .map((genre: { name?: string }) => genre?.name)
         .filter(Boolean),
@@ -45,29 +39,34 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
   ) as string[];
 
   const selectedGenre = params.genre?.trim();
-  const readGame = (value: unknown) => {
-    if (Array.isArray(value)) return value[0] ?? null;
-    if (value && typeof value === "object") return value as Record<string, unknown>;
-    return null;
-  };
   const filteredRows = selectedGenre
-    ? (rankingRows ?? []).filter((row) =>
+    ? rankingRows.filter((row) =>
         (((readGame(row.game)?.genres_json as Array<{ name?: string }>) ?? [])).some(
           (genre: { name?: string }) => genre?.name === selectedGenre,
         ),
       )
-    : (rankingRows ?? []);
+    : rankingRows;
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
-      <div className="mb-5 flex items-end justify-between">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Your global ranking</h1>
           <p className="text-sm text-white/70">Binary-search inserted order is source of truth.</p>
         </div>
-        <Link href="/" className="text-sm text-[var(--accent-2)]">
-          Add another game
-        </Link>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <AuthHeader />
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-end sm:gap-3">
+            {user ? (
+              <Link href="/friends" className="text-sm text-[var(--accent-2)]">
+                Friends
+              </Link>
+            ) : null}
+            <Link href="/" className="text-sm text-[var(--accent-2)]">
+              Add another game
+            </Link>
+          </div>
+        </div>
       </div>
 
       <section className="panel mb-4 p-4">
@@ -132,7 +131,13 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
             );
           })}
           {filteredRows.length === 0 ? (
-            <p className="text-sm text-white/70">No ranked games yet. Add one from the home page.</p>
+            <p className="text-sm text-white/70">
+              No ranked games yet. Add one from the{" "}
+              <Link href="/" className="text-[var(--accent-2)]">
+                home page
+              </Link>
+              .
+            </p>
           ) : null}
         </div>
       </section>

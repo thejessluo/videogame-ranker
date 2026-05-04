@@ -18,10 +18,11 @@ type Candidate =
   | { type: "rawg"; game: SearchGame }
   | { type: "manual"; game: { title: string; genres: string[] } };
 
-export function AddGameForm() {
+export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boolean }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchGame[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
   const [manualGenres, setManualGenres] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -49,6 +50,7 @@ export function AddGameForm() {
       setError(payload.error ?? "Search failed.");
       return;
     }
+    setHasSearched(true);
     setResults(payload.games ?? []);
   }
 
@@ -75,7 +77,8 @@ export function AddGameForm() {
       router.push(`/compare?session=${payload.sessionId}`);
       return;
     }
-    router.push("/rankings");
+    router.push("/");
+    router.refresh();
   }
 
   async function addManualWithSentiment(
@@ -104,10 +107,15 @@ export function AddGameForm() {
       router.push(`/compare?session=${payload.sessionId}`);
       return;
     }
-    router.push("/rankings");
+    router.push("/");
+    router.refresh();
   }
 
   async function bookmarkRawg(game: SearchGame) {
+    if (!allowBookmarks) {
+      setError("Sign in to save bookmarks.");
+      return;
+    }
     setError(null);
     const response = await fetch("/api/bookmarks", {
       method: "POST",
@@ -126,6 +134,10 @@ export function AddGameForm() {
   }
 
   async function bookmarkManual() {
+    if (!allowBookmarks) {
+      setError("Sign in to save bookmarks.");
+      return;
+    }
     if (!manualTitle.trim()) return;
     setError(null);
     const response = await fetch("/api/bookmarks", {
@@ -154,17 +166,23 @@ export function AddGameForm() {
         Search/select first, then sentiment popup, then comparison placement.
       </p>
 
-      <div className="mt-4 flex gap-2">
+      <form
+        className="mt-4 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void search();
+        }}
+      >
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search RAWG (e.g. Hades)"
           className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2"
         />
-        <button className="btn btn-primary" onClick={search} disabled={loading}>
+        <button type="submit" className="btn btn-primary" disabled={loading}>
           {loading ? "..." : "Search"}
         </button>
-      </div>
+      </form>
 
       {results.length > 0 ? (
         <div className="mt-3 space-y-2">
@@ -192,57 +210,69 @@ export function AddGameForm() {
               </div>
               <div className="mt-3 flex gap-2">
                 <button
+                  type="button"
                   className="btn btn-primary text-sm"
                   onClick={() => setSelectedCandidate({ type: "rawg", game })}
                 >
                   Rank this
                 </button>
-                <button
-                  className="btn btn-secondary text-sm"
-                  onClick={() => bookmarkRawg(game)}
-                >
-                  Bookmark
-                </button>
+                {allowBookmarks ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm"
+                    onClick={() => bookmarkRawg(game)}
+                  >
+                    Bookmark
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
       ) : null}
 
-      <div className="mt-6 border-t border-white/10 pt-4">
-        <p className="mb-2 text-sm font-medium">Manual add fallback</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            value={manualTitle}
-            onChange={(event) => setManualTitle(event.target.value)}
-            placeholder="Game title"
-            className="rounded-lg border border-white/15 bg-black/20 px-3 py-2"
-          />
-          <input
-            value={manualGenres}
-            onChange={(event) => setManualGenres(event.target.value)}
-            placeholder="Genres (comma-separated)"
-            className="rounded-lg border border-white/15 bg-black/20 px-3 py-2"
-          />
+      {hasSearched ? (
+        <div className="mt-6 border-t border-white/10 pt-4">
+          <p className="mb-2 text-sm font-medium">Manual add fallback</p>
+          <p className="mb-3 text-xs text-white/60">
+            Use this if your game did not appear in RAWG search results.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              value={manualTitle}
+              onChange={(event) => setManualTitle(event.target.value)}
+              placeholder="Game title"
+              className="rounded-lg border border-white/15 bg-black/20 px-3 py-2"
+            />
+            <input
+              value={manualGenres}
+              onChange={(event) => setManualGenres(event.target.value)}
+              placeholder="Genres (comma-separated)"
+              className="rounded-lg border border-white/15 bg-black/20 px-3 py-2"
+            />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (!manualTitle.trim()) return;
+                setSelectedCandidate({
+                  type: "manual",
+                  game: { title: manualTitle.trim(), genres: tags },
+                });
+              }}
+              className="btn btn-primary"
+            >
+              Rank manual game
+            </button>
+            {allowBookmarks ? (
+              <button type="button" onClick={bookmarkManual} className="btn btn-secondary">
+                Bookmark manual game
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={() => {
-              if (!manualTitle.trim()) return;
-              setSelectedCandidate({
-                type: "manual",
-                game: { title: manualTitle.trim(), genres: tags },
-              });
-            }}
-            className="btn btn-primary"
-          >
-            Rank manual game
-          </button>
-          <button onClick={bookmarkManual} className="btn btn-secondary">
-            Bookmark manual game
-          </button>
-        </div>
-      </div>
+      ) : null}
 
       {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
 
