@@ -1,5 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
+/** True when anonymous (guest) ranking APIs can run. Guest tables are service-role only in RLS. */
+export function hasServiceRoleConfig(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
+  );
+}
+
 /** Server-only Supabase client (bypasses RLS). Used for anonymous guest rankings. */
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

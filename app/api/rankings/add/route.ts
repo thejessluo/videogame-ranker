@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import {
-  initialBoundsFromSentiment,
-  type BroadRating,
-  scoreFromSentimentOrdinal,
-  slugify,
-} from "@/lib/ranking/beli";
+import { type BroadRating, normalizeBroadRating, scoreFromSentimentOrdinal, slugify, tierInsertInclusiveBounds } from "@/lib/ranking/beli";
 import { resolveRankingDbCtx } from "@/lib/ranking/request-actor";
+import { applyGlobalRankingOrder } from "@/lib/ranking/session-engine";
+import { RANKING_GUEST_UNAVAILABLE } from "@/lib/ranking/guest-messages";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import type { RankingDbCtx } from "@/lib/ranking/db-ctx";
 
@@ -91,8 +88,7 @@ export async function POST(request: Request) {
       if (!admin) {
         return NextResponse.json(
           {
-            error:
-              "Sign in to continue, or set SUPABASE_SERVICE_ROLE_KEY on the server for anonymous rankings.",
+            error: RANKING_GUEST_UNAVAILABLE,
           },
           { status: 503 },
         );
@@ -156,7 +152,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "inserted", done: true });
     }
 
-    const bounds = initialBoundsFromSentiment(current.length, body.broadRating);
+    const br = normalizeBroadRating(body.broadRating);
+    const { minG, maxG } = tierInsertInclusiveBounds(current, br);
+
+    if (minG === maxG) {
+      const base = current.map((r) => ({
+        game_id: r.game_id,
+        status: r.status,
+        broad_rating: r.broad_rating,
+        notes: r.notes,
+        tags: r.tags ?? [],
+      }));
+      const insertRow = {
+        game_id: gameId,
+        status: "played" as const,
+        broad_rating: body.broadRating,
+        notes: body.notes ?? null,
+        tags: body.tags ?? [],
+      };
+      const merged = [...base];
+      merged.splice(minG, 0, insertRow);
+      await applyGlobalRankingOrder(ctx, merged);
+      return NextResponse.json({ status: "inserted", done: true });
+    }
+
     const { data: session, error: sessionError } = await ctx.client
       .from(sessionsTable)
       .insert({
@@ -164,8 +183,8 @@ export async function POST(request: Request) {
         game_id: gameId,
         list_scope: "global",
         list_key: "all",
-        low: bounds.low,
-        high: Math.min(bounds.high, current.length - 1),
+        low: 0,
+        high: Math.max(0, current.length - 1),
         broad_rating: body.broadRating,
         status: "played",
         notes: body.notes ?? null,

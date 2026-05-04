@@ -1,26 +1,37 @@
-export type BroadRating = "loved" | "liked" | "okay" | "disliked" | "hated";
+export type BroadRating = "liked_it" | "fine" | "didnt_like";
 
 /** Display-only numeric score; list order is source of truth. */
 export const SENTIMENT_SCORE_BANDS: Record<BroadRating, { min: number; max: number }> = {
-  loved: { min: 8.5, max: 10 },
-  liked: { min: 7.0, max: 8.49 },
-  okay: { min: 5.0, max: 6.99 },
-  disliked: { min: 2.5, max: 4.99 },
-  hated: { min: 0, max: 2.49 },
+  liked_it: { min: 7.0, max: 10.0 },
+  fine: { min: 4.0, max: 6.99 },
+  didnt_like: { min: 0.0, max: 3.99 },
 };
 
+/** Short labels for UI (matches picker copy). */
+export const BROAD_RATING_DISPLAY: Record<BroadRating, string> = {
+  liked_it: "I liked it!",
+  fine: "It was fine",
+  didnt_like: "I didn't like it",
+};
+
+export function broadRatingDisplayLabel(value: string | undefined | null): string {
+  return BROAD_RATING_DISPLAY[normalizeBroadRating(value)];
+}
+
+/**
+ * Maps stored `broad_rating` text to the current tier model.
+ * Legacy 5-tier values are folded into the nearest new band.
+ */
 export function normalizeBroadRating(value: string | undefined | null): BroadRating {
-  const v = (value ?? "okay").toLowerCase().trim();
-  if (
-    v === "loved" ||
-    v === "liked" ||
-    v === "okay" ||
-    v === "disliked" ||
-    v === "hated"
-  ) {
-    return v;
-  }
-  return "okay";
+  const v = (value ?? "fine").toLowerCase().trim();
+  if (v === "liked_it" || v === "liked-it") return "liked_it";
+  if (v === "fine") return "fine";
+  if (v === "didnt_like" || v === "didnt-like" || v === "did_not_like") return "didnt_like";
+  // Legacy migration
+  if (v === "loved" || v === "liked") return "liked_it";
+  if (v === "okay") return "fine";
+  if (v === "disliked" || v === "hated") return "didnt_like";
+  return "fine";
 }
 
 function roundScore(value: number) {
@@ -79,28 +90,36 @@ export function slugify(input: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export function initialBoundsFromSentiment(
-  total: number,
-  broadRating: BroadRating,
-) {
-  if (total <= 1) return { low: 0, high: Math.max(total - 1, 0) };
+/**
+ * Valid inclusive global insert index range `[minG, maxG]` for `newTier` when the list is
+ * strictly segmented as **liked_it → fine → didnt_like** (index 0 = best).
+ * Used so a lower tier (e.g. fine) is never head-to-head placed above a higher tier (liked_it)
+ * when the tier slot is already unique (e.g. two liked_it, new fine → only `g === 2`).
+ */
+export function tierInsertInclusiveBounds(
+  fullRanked: { broad_rating?: string | null }[],
+  newTier: BroadRating,
+): { minG: number; maxG: number } {
+  const n = fullRanked.length;
+  const tiers = fullRanked.map((r) => normalizeBroadRating(r.broad_rating));
 
-  const q1 = Math.floor(total * 0.25);
-  const q2 = Math.floor(total * 0.5);
-  const q3 = Math.floor(total * 0.75);
-
-  switch (broadRating) {
-    case "loved":
-      return { low: 0, high: Math.max(q1, 0) };
-    case "liked":
-      return { low: Math.max(q1, 0), high: Math.max(q2, 0) };
-    case "okay":
-      return { low: Math.max(q1, 0), high: Math.max(q3, 0) };
-    case "disliked":
-      return { low: Math.max(q2, 0), high: Math.max(total - 2, 0) };
-    case "hated":
-      return { low: Math.max(q3, 0), high: Math.max(total - 1, 0) };
-    default:
-      return { low: 0, high: Math.max(total - 1, 0) };
+  if (newTier === "liked_it") {
+    const firstNonLiked = tiers.findIndex((t) => t !== "liked_it");
+    const maxG = firstNonLiked === -1 ? n : firstNonLiked;
+    return { minG: 0, maxG };
   }
+
+  if (newTier === "fine") {
+    const lastLiked = tiers.lastIndexOf("liked_it");
+    const firstDont = tiers.indexOf("didnt_like");
+    const minG = lastLiked === -1 ? 0 : lastLiked + 1;
+    const maxG = firstDont === -1 ? n : firstDont;
+    return { minG, maxG };
+  }
+
+  const lastFine = tiers.lastIndexOf("fine");
+  const lastLiked = tiers.lastIndexOf("liked_it");
+  const lastMiddle = Math.max(lastFine, lastLiked);
+  const minG = lastMiddle === -1 ? 0 : lastMiddle + 1;
+  return { minG, maxG: n };
 }

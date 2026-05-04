@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { broadRatingDisplayLabel } from "@/lib/ranking/beli";
 import type { HomeRankingRow } from "@/lib/ranking/home-data";
 import { RerankButton } from "@/components/rerank-button";
 import { RemoveFromRankingButton } from "@/components/remove-from-ranking-button";
@@ -13,10 +14,13 @@ export function RankingPreviewBlock({
   rows,
   title,
   emptyMessage,
+  showRowActions = false,
 }: {
   rows: HomeRankingRow[];
   title: string;
   emptyMessage: string;
+  /** Re-rank / remove — use on the full rankings page; keep off the home preview. */
+  showRowActions?: boolean;
 }) {
   return (
     <section className="panel p-4 sm:p-6">
@@ -49,9 +53,9 @@ export function RankingPreviewBlock({
                     {game?.name ?? "Unknown game"}
                   </p>
                   <p className="mt-1 text-xs text-white/70">
-                    Score {row.score} · {row.broad_rating}
+                    Score {row.score} · {broadRatingDisplayLabel(row.broad_rating)}
                   </p>
-                  {game?.id ? (
+                  {showRowActions && game?.id ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <RerankButton gameId={game.id} inline />
                       <RemoveFromRankingButton

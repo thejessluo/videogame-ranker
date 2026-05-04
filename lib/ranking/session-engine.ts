@@ -1,4 +1,9 @@
-import { displayScoresForOrderedList } from "@/lib/ranking/beli";
+import {
+  displayScoresForOrderedList,
+  normalizeBroadRating,
+  tierInsertInclusiveBounds,
+  type BroadRating,
+} from "@/lib/ranking/beli";
 import type { RankingDbCtx } from "@/lib/ranking/db-ctx";
 
 type AnswerBody = {
@@ -94,6 +99,11 @@ function getGenreKeys(game: GameRecord | null) {
     .filter(Boolean);
 }
 
+/**
+ * Non-empty ⇒ at least one ranked game shares a genre tag with the new game (else we “rank
+ * globally” by tier only). Head-to-head order within a tier uses {@link buildTierComparableSlice},
+ * not this genre filter, so we still compare against every same-tier neighbor in the list.
+ */
 function getComparableRankedGames(fullRanked: RankedRow[], newGame: GameRecord | null) {
   const newGenres = new Set(getGenreKeys(newGame));
   if (newGenres.size === 0) {
@@ -105,6 +115,27 @@ function getComparableRankedGames(fullRanked: RankedRow[], newGame: GameRecord |
     return getGenreKeys(game).some((genreKey) => newGenres.has(genreKey));
   });
 }
+
+/**
+ * Rows to head-to-head compare against when placing the new game: every existing row in the same
+ * sentiment tier whose global index lies in the tier slot `[minG, maxG)`. Built from the **full**
+ * ordered list (not genre-filtered), so binary search can distinguish order among all peers in that
+ * tier—genre overlap alone often leaves a single candidate and skips needed comparisons.
+ */
+function buildTierComparableSlice(
+  fullRanked: RankedRow[],
+  newTier: BroadRating,
+  minG: number,
+  maxG: number,
+): RankedRow[] {
+  return fullRanked.filter((row, gi) => {
+    return normalizeBroadRating(row.broad_rating) === newTier && gi >= minG && gi <= maxG - 1;
+  });
+}
+
+/** When no ranked game shares a genre tag, we slot using sentiment bands only (see rankGloballyFromPendingSession). */
+const AUTO_PLACE_NO_GENRE_OVERLAP =
+  "Added to your global ranking. None of your ranked games share a genre tag with this one, so we placed it using only your three-tier pick (liked it / fine / didn’t like): your choice maps to a score band, then a slot inside that band in your existing order—same idea as “rank globally anyway.”";
 
 function resolveGlobalInsertIndex(
   comparable: RankedRow[],
@@ -136,6 +167,76 @@ function clampBounds(low: number, high: number, size: number) {
 
 function midpoint(low: number, high: number) {
   return Math.floor((low + high) / 2);
+}
+
+type CompactRankRow = {
+  game_id: string;
+  status: string;
+  broad_rating: string;
+  notes: string | null;
+  tags: string[];
+};
+
+async function persistFinalRankingList(ctx: RankingDbCtx, finalList: CompactRankRow[]) {
+  const scores = displayScoresForOrderedList(finalList);
+  const t = tables(ctx);
+  const ownerPayload =
+    ctx.mode === "user" ? { user_id: ctx.userId } : { guest_id: ctx.guestId };
+
+  const payload = finalList.map((row, index) => ({
+    ...ownerPayload,
+    list_scope: "global",
+    list_key: "all",
+    game_id: row.game_id,
+    rank_position: index + 1,
+    score: scores[index]!,
+    status: row.status ?? "played",
+    broad_rating: row.broad_rating ?? "fine",
+    notes: row.notes ?? null,
+    tags: row.tags ?? [],
+    updated_at: new Date().toISOString(),
+  }));
+
+  const { error: deleteError } = await ctx.client
+    .from(t.rankings)
+    .delete()
+    .eq(t.ownerCol, t.ownerId)
+    .eq("list_scope", "global")
+    .eq("list_key", "all");
+  if (deleteError) throw new Error(deleteError.message);
+
+  const { error: insertError } = await ctx.client.from(t.rankings).insert(payload);
+  if (insertError) throw new Error(insertError.message);
+}
+
+async function insertAtGlobalIndex(
+  ctx: RankingDbCtx,
+  session: SessionRow,
+  fullRanked: RankedRow[],
+  globalInsertIndex: number,
+) {
+  const insertRow: CompactRankRow = {
+    game_id: session.game_id,
+    status: session.status,
+    broad_rating: session.broad_rating,
+    notes: session.notes,
+    tags: session.tags ?? [],
+  };
+  const base: CompactRankRow[] = fullRanked.map((r) => ({
+    game_id: r.game_id,
+    status: r.status,
+    broad_rating: r.broad_rating,
+    notes: r.notes,
+    tags: r.tags ?? [],
+  }));
+  const finalList = [...base];
+  finalList.splice(globalInsertIndex, 0, insertRow);
+  await persistFinalRankingList(ctx, finalList);
+}
+
+/** Exported for API routes that insert a full order without a comparison session. */
+export async function applyGlobalRankingOrder(ctx: RankingDbCtx, rows: CompactRankRow[]) {
+  await persistFinalRankingList(ctx, rows);
 }
 
 async function getSession(ctx: RankingDbCtx, sessionId: string) {
@@ -183,17 +284,50 @@ async function getRankedGames(ctx: RankingDbCtx) {
   return (data ?? []) as RankedRow[];
 }
 
-async function insertAtResolvedPosition(
-  ctx: RankingDbCtx,
-  session: SessionRow,
-  fullRanked: RankedRow[],
-  comparable: RankedRow[],
-  comparableInsertAt: number,
-) {
+/**
+ * Place the pending session game into the global list using sentiment bands only (same as
+ * follow-up "rank globally anyway"). Used when there are no genre-overlapping ranked games
+ * to compare against.
+ */
+export async function rankGloballyFromPendingSession(ctx: RankingDbCtx, sessionId: string) {
+  const session = await getSession(ctx, sessionId);
   const t = tables(ctx);
-  const globalInsertAt = resolveGlobalInsertIndex(comparable, comparableInsertAt, fullRanked);
-  const finalList = [...fullRanked];
-  finalList.splice(globalInsertAt, 0, {
+
+  const { data: existing } = await ctx.client
+    .from(t.rankings)
+    .select("id")
+    .eq(t.ownerCol, t.ownerId)
+    .eq("list_scope", "global")
+    .eq("list_key", "all")
+    .eq("game_id", session.game_id)
+    .maybeSingle();
+  if (existing) {
+    await completeSession(ctx, session.id);
+    return;
+  }
+
+  const fullRanked = await getRankedGames(ctx);
+  const rankedForInsert = fullRanked.map((row) => ({
+    game_id: row.game_id,
+    status: row.status,
+    broad_rating: row.broad_rating,
+    notes: row.notes,
+    tags: row.tags ?? [],
+  }));
+
+  const br = normalizeBroadRating(session.broad_rating);
+  const { minG, maxG } = tierInsertInclusiveBounds(rankedForInsert, br);
+  let insertAt: number;
+  if (minG > maxG) {
+    insertAt = Math.min(rankedForInsert.length, Math.max(0, Math.floor(rankedForInsert.length / 2)));
+  } else if (minG === maxG) {
+    insertAt = minG;
+  } else {
+    insertAt = Math.floor((minG + maxG) / 2);
+  }
+
+  const finalList = [...rankedForInsert];
+  finalList.splice(insertAt, 0, {
     game_id: session.game_id,
     status: session.status,
     broad_rating: session.broad_rating,
@@ -201,34 +335,36 @@ async function insertAtResolvedPosition(
     tags: session.tags ?? [],
   });
 
-  const scores = displayScoresForOrderedList(finalList);
-  const ownerPayload =
-    ctx.mode === "user" ? { user_id: ctx.userId } : { guest_id: ctx.guestId };
+  await persistFinalRankingList(ctx, finalList);
 
-  const payload = finalList.map((row, index) => ({
-    ...ownerPayload,
-    list_scope: "global",
-    list_key: "all",
-    game_id: row.game_id,
-    rank_position: index + 1,
-    score: scores[index]!,
-    status: row.status ?? "played",
-    broad_rating: row.broad_rating ?? "okay",
-    notes: row.notes ?? null,
-    tags: row.tags ?? [],
-    updated_at: new Date().toISOString(),
+  await completeSession(ctx, session.id);
+}
+
+async function insertAtResolvedPosition(
+  ctx: RankingDbCtx,
+  session: SessionRow,
+  fullRanked: RankedRow[],
+  comparable: RankedRow[],
+  comparableInsertAt: number,
+) {
+  const globalInsertAt = resolveGlobalInsertIndex(comparable, comparableInsertAt, fullRanked);
+  const base: CompactRankRow[] = fullRanked.map((r) => ({
+    game_id: r.game_id,
+    status: r.status,
+    broad_rating: r.broad_rating,
+    notes: r.notes,
+    tags: r.tags ?? [],
   }));
-
-  const { error: deleteError } = await ctx.client
-    .from(t.rankings)
-    .delete()
-    .eq(t.ownerCol, t.ownerId)
-    .eq("list_scope", "global")
-    .eq("list_key", "all");
-  if (deleteError) throw new Error(deleteError.message);
-
-  const { error: insertError } = await ctx.client.from(t.rankings).insert(payload);
-  if (insertError) throw new Error(insertError.message);
+  const insertRow: CompactRankRow = {
+    game_id: session.game_id,
+    status: session.status,
+    broad_rating: session.broad_rating,
+    notes: session.notes,
+    tags: session.tags ?? [],
+  };
+  const finalList = [...base];
+  finalList.splice(globalInsertAt, 0, insertRow);
+  await persistFinalRankingList(ctx, finalList);
 }
 
 export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string) {
@@ -241,26 +377,53 @@ export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string)
   const comparable = getComparableRankedGames(fullRanked, newGame);
 
   if (comparable.length === 0) {
-    await completeSession(ctx, session.id);
-    return {
-      status: "no_comparable_games" as const,
-      message:
-        "No comparable games found in your ranked list yet. Add more games in similar genres first.",
-    };
+    await rankGloballyFromPendingSession(ctx, sessionId);
+    return { status: "done" as const, message: AUTO_PLACE_NO_GENRE_OVERLAP };
   }
 
-  const bounds = clampBounds(session.low, session.high, comparable.length);
-  if (bounds.low !== session.low || bounds.high !== session.high) {
+  const br = normalizeBroadRating(session.broad_rating);
+  const { minG, maxG } = tierInsertInclusiveBounds(fullRanked, br);
+
+  if (minG > maxG) {
+    await rankGloballyFromPendingSession(ctx, sessionId);
+    return { status: "done" as const, message: AUTO_PLACE_NO_GENRE_OVERLAP };
+  }
+
+  if (minG === maxG) {
+    await insertAtGlobalIndex(ctx, session, fullRanked, minG);
+    await completeSession(ctx, session.id);
+    return { status: "done" as const };
+  }
+
+  const tierComparable = buildTierComparableSlice(fullRanked, br, minG, maxG);
+
+  if (tierComparable.length === 0) {
+    await insertAtGlobalIndex(ctx, session, fullRanked, minG);
+    await completeSession(ctx, session.id);
+    return { status: "done" as const };
+  }
+
+  let bounds = clampBounds(session.low, session.high, tierComparable.length);
+  if (bounds.low > bounds.high || bounds.low < 0 || bounds.high >= tierComparable.length) {
+    bounds = { low: 0, high: tierComparable.length - 1 };
+    await saveBounds(ctx, session.id, bounds.low, bounds.high);
+  } else if (bounds.low !== session.low || bounds.high !== session.high) {
     await saveBounds(ctx, session.id, bounds.low, bounds.high);
   }
 
-  if (bounds.low > bounds.high || fullRanked.length === 0) {
-    return { status: "ready_to_insert" as const };
+  if (bounds.low > bounds.high) {
+    await insertAtResolvedPosition(ctx, session, fullRanked, tierComparable, bounds.low);
+    await completeSession(ctx, session.id);
+    return { status: "done" as const };
   }
 
   const mid = midpoint(bounds.low, bounds.high);
-  const compared = comparable[mid];
-  if (!compared) return { status: "ready_to_insert" as const };
+  const compared = tierComparable[mid];
+  if (!compared) {
+    await insertAtResolvedPosition(ctx, session, fullRanked, tierComparable, bounds.low);
+    await completeSession(ctx, session.id);
+    return { status: "done" as const };
+  }
 
   return {
     status: "comparing" as const,
@@ -269,7 +432,7 @@ export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string)
     mid,
     newGame,
     comparedGame: normalizeGame(compared.game),
-    progress: `${Math.max(1, mid + 1)} / ${Math.max(1, comparable.length)}`,
+    progress: `${Math.max(1, mid + 1)} / ${Math.max(1, tierComparable.length)}`,
   };
 }
 
@@ -288,16 +451,43 @@ export async function runRankingSessionPost(ctx: RankingDbCtx, body: AnswerBody)
     };
   }
 
+  if (!session.completed && comparable.length === 0) {
+    await rankGloballyFromPendingSession(ctx, body.sessionId);
+    return { status: "done" as const, message: AUTO_PLACE_NO_GENRE_OVERLAP };
+  }
+
   if (!session.completed && comparable.length > 0) {
-    const bounds = clampBounds(session.low, session.high, comparable.length);
+    const br = normalizeBroadRating(session.broad_rating);
+    const { minG, maxG } = tierInsertInclusiveBounds(fullRanked, br);
+
+    if (minG > maxG) {
+      await rankGloballyFromPendingSession(ctx, body.sessionId);
+      return { status: "done" as const, message: AUTO_PLACE_NO_GENRE_OVERLAP };
+    }
+
+    if (minG === maxG) {
+      await insertAtGlobalIndex(ctx, session, fullRanked, minG);
+      await completeSession(ctx, session.id);
+      return { status: "done" as const };
+    }
+
+    const tierComparable = buildTierComparableSlice(fullRanked, br, minG, maxG);
+
+    if (tierComparable.length === 0) {
+      await insertAtGlobalIndex(ctx, session, fullRanked, minG);
+      await completeSession(ctx, session.id);
+      return { status: "done" as const };
+    }
+
+    const bounds = clampBounds(session.low, session.high, tierComparable.length);
     if (bounds.low > bounds.high) {
-      await insertAtResolvedPosition(ctx, session, fullRanked, comparable, bounds.low);
+      await insertAtResolvedPosition(ctx, session, fullRanked, tierComparable, bounds.low);
       await completeSession(ctx, session.id);
       return { status: "done" as const };
     }
 
     const mid = midpoint(bounds.low, bounds.high);
-    const compared = comparable[mid];
+    const compared = tierComparable[mid];
     if (!compared) throw new Error("Comparison target missing.");
 
     let low = bounds.low;
@@ -332,7 +522,7 @@ export async function runRankingSessionPost(ctx: RankingDbCtx, body: AnswerBody)
       .eq("id", session.id);
 
     if (low <= high) return { status: "continue" as const };
-    await insertAtResolvedPosition(ctx, session, fullRanked, comparable, low);
+    await insertAtResolvedPosition(ctx, session, fullRanked, tierComparable, low);
     await completeSession(ctx, session.id);
 
     return { status: "done" as const };

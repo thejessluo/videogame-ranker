@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { displayScoresForOrderedList } from "@/lib/ranking/beli";
 import { resolveRankingDbCtx } from "@/lib/ranking/request-actor";
+import { RANKING_GUEST_UNAVAILABLE } from "@/lib/ranking/guest-messages";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "Sign in to continue, or set SUPABASE_SERVICE_ROLE_KEY on the server for anonymous rankings.",
+              RANKING_GUEST_UNAVAILABLE,
           },
           { status: 503 },
         );
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
       rank_position: index + 1,
       score: scores[index]!,
       status: row.status ?? "played",
-      broad_rating: row.broad_rating ?? "okay",
+      broad_rating: row.broad_rating ?? "fine",
       notes: row.notes ?? null,
       tags: row.tags ?? [],
       updated_at: new Date().toISOString(),
