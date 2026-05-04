@@ -9,7 +9,7 @@ import type { RankingDbCtx } from "@/lib/ranking/db-ctx";
 export const dynamic = "force-dynamic";
 
 type AddBody = {
-  mode: "rawg" | "manual";
+  mode: "rawg" | "manual" | "existing";
   broadRating: BroadRating;
   notes?: string;
   tags?: string[];
@@ -26,6 +26,8 @@ type AddBody = {
     releaseYear?: string;
     genres?: string[];
   };
+  /** When mode is `existing`, rank a row already in `games` (e.g. from bookmarks). */
+  gameId?: string;
 };
 
 async function resolveGameId(ctx: RankingDbCtx, body: AddBody): Promise<
@@ -74,6 +76,15 @@ async function resolveGameId(ctx: RankingDbCtx, body: AddBody): Promise<
       .select("id")
       .single();
     if (error || !data) return { ok: false, status: 500, error: error?.message ?? "Game insert failed." };
+    return { ok: true, gameId: data.id };
+  }
+
+  if (body.mode === "existing" && body.gameId) {
+    const trimmed = body.gameId.trim();
+    if (!trimmed) return { ok: false, status: 400, error: "Missing game id." };
+    const { data, error } = await ctx.client.from("games").select("id").eq("id", trimmed).maybeSingle();
+    if (error) return { ok: false, status: 500, error: error.message };
+    if (!data) return { ok: false, status: 404, error: "Game not found." };
     return { ok: true, gameId: data.id };
   }
 

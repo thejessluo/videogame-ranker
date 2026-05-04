@@ -45,14 +45,9 @@ export default async function BookmarksPage() {
           <h1 className="text-2xl font-semibold">Bookmarked games</h1>
           <p className="text-sm text-white/70">Want-to-play list (not ranked).</p>
         </div>
-        <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-end sm:gap-3">
-          <Link href="/friends" className="text-sm text-[var(--accent-2)]">
-            Friends
-          </Link>
-          <Link href="/" className="text-sm text-[var(--accent-2)]">
-            Back to add/search
-          </Link>
-        </div>
+        <Link href="/" className="text-sm text-[var(--accent-2)]">
+          Back to add/search
+        </Link>
       </div>
 
       <section className="panel p-4">

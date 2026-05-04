@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AddGameForm } from "@/components/add-game-form";
-import { HomeNavLinks } from "@/components/home-nav-links";
 import { RankingPreviewBlock } from "@/components/ranking-preview-block";
 import { fetchMyRankings } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
@@ -20,24 +19,26 @@ export default async function Home() {
         Rank by comparison, not by rating.
       </p>
 
-      <HomeNavLinks />
-
-      {!user ? (
-        <p className="mb-4 text-sm text-white/60">
-          Rankings are saved in this browser (cookie + server storage). Sign in to keep them on your
-          account, use bookmarks, and add friends.
-        </p>
-      ) : null}
-
       <AddGameForm
         allowBookmarks={Boolean(user)}
         warnAnonymousRankingUnavailable={!user && !guestRankingConfigured}
       />
 
       <div className="mt-6">
+        <div className="mb-4 flex justify-end">
+          <Link
+            href="/rankings"
+            className="group inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] underline-offset-[5px] decoration-[var(--accent)]/50 hover:underline"
+          >
+            See all global rankings
+            <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
+              →
+            </span>
+          </Link>
+        </div>
         <RankingPreviewBlock
           rows={top10}
-          title="Your top 10 global rankings"
+          title="Your top 10 games"
           emptyMessage="No games ranked yet. Add one above."
         />
       </div>
@@ -49,6 +50,13 @@ export default async function Home() {
         </Link>{" "}
         for genre filters and the complete list.
       </p>
+
+      {!user ? (
+        <p className="mt-10 text-center text-sm text-white/60">
+          Rankings are saved in this browser. Sign in to keep them on your account, use bookmarks,
+          and add friends.
+        </p>
+      ) : null}
     </main>
   );
 }
