@@ -12,6 +12,7 @@ create table if not exists public.games (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.games alter column rawg_id drop not null;
 
 create index if not exists games_slug_idx on public.games (slug);
 create index if not exists games_name_idx on public.games (name);
@@ -55,6 +56,68 @@ create table if not exists public.genre_ratings (
 
 create index if not exists genre_ratings_user_genre_idx
   on public.genre_ratings (user_id, genre_slug, rating_mu desc);
+
+create table if not exists public.user_game_rankings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  game_id uuid not null references public.games(id) on delete cascade,
+  list_scope text not null default 'global',
+  list_key text not null default 'all',
+  rank_position integer not null,
+  score numeric(5,2) not null default 5.0,
+  status text not null default 'played',
+  broad_rating text not null default 'okay',
+  notes text,
+  tags text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, list_scope, list_key, game_id),
+  unique (user_id, list_scope, list_key, rank_position)
+);
+
+create index if not exists user_game_rankings_scope_idx
+  on public.user_game_rankings (user_id, list_scope, list_key, rank_position);
+
+create table if not exists public.ranking_insert_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  game_id uuid not null references public.games(id) on delete cascade,
+  list_scope text not null default 'global',
+  list_key text not null default 'all',
+  low integer not null default 0,
+  high integer not null default 0,
+  broad_rating text not null default 'okay',
+  status text not null default 'played',
+  notes text,
+  tags text[] not null default '{}',
+  completed boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists ranking_insert_sessions_user_idx
+  on public.ranking_insert_sessions (user_id, completed, created_at desc);
+
+create table if not exists public.ranking_comparisons (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  session_id uuid not null references public.ranking_insert_sessions(id) on delete cascade,
+  new_game_id uuid not null references public.games(id) on delete cascade,
+  compared_game_id uuid not null references public.games(id) on delete cascade,
+  winner_game_id uuid not null references public.games(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.user_game_bookmarks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  game_id uuid not null references public.games(id) on delete cascade,
+  notes text,
+  tags text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, game_id)
+);
 
 create or replace function public.handle_new_user()
 returns trigger

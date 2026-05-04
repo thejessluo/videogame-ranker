@@ -1,17 +1,8 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { RerankButton } from "@/components/rerank-button";
 import { createClient } from "@/lib/supabase/server";
-
-type RatingRow = {
-  rating_mu: number | string;
-  comparisons_count: number;
-  game: Array<{ name: string; cover_url: string | null }> | null;
-};
-
-type RecentRow = {
-  created_at: string;
-  game: Array<{ name: string }> | null;
-};
 
 type RankingsPageProps = {
   searchParams: Promise<{
@@ -30,103 +21,118 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
     redirect("/auth");
   }
 
-  const { data: genreRows } = await supabase
-    .from("genre_ratings")
-    .select("genre_slug")
+  const { data: rankingRows } = await supabase
+    .from("user_game_rankings")
+    .select(
+      "rank_position,score,status,broad_rating,notes,tags,game:games(id,name,cover_url,genres_json)",
+    )
     .eq("user_id", user.id)
-    .limit(300);
+    .eq("list_scope", "global")
+    .eq("list_key", "all")
+    .order("rank_position", { ascending: true });
 
-  const genres = Array.from(new Set((genreRows ?? []).map((row) => row.genre_slug)));
-  const selectedGenre = params.genre ?? genres[0];
+  const allGenres = Array.from(
+    new Set(
+      (rankingRows ?? [])
+        .flatMap((row) => {
+          const game = Array.isArray(row.game) ? row.game[0] : row.game;
+          return (game as { genres_json?: Array<{ name?: string }> } | null)
+            ?.genres_json ?? [];
+        })
+        .map((genre: { name?: string }) => genre?.name)
+        .filter(Boolean),
+    ),
+  ) as string[];
 
-  const { data: ratings } = selectedGenre
-    ? await supabase
-        .from("genre_ratings")
-        .select("rating_mu,comparisons_count,game:games(name,cover_url)")
-        .eq("user_id", user.id)
-        .eq("genre_slug", selectedGenre)
-        .order("rating_mu", { ascending: false })
-        .limit(25)
-    : { data: [] as RatingRow[] };
-
-  const { data: recent } = await supabase
-    .from("comparisons")
-    .select("created_at,game:games!comparisons_winner_game_id_fkey(name)")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(8);
+  const selectedGenre = params.genre?.trim();
+  const readGame = (value: unknown) => {
+    if (Array.isArray(value)) return value[0] ?? null;
+    if (value && typeof value === "object") return value as Record<string, unknown>;
+    return null;
+  };
+  const filteredRows = selectedGenre
+    ? (rankingRows ?? []).filter((row) =>
+        (((readGame(row.game)?.genres_json as Array<{ name?: string }>) ?? [])).some(
+          (genre: { name?: string }) => genre?.name === selectedGenre,
+        ),
+      )
+    : (rankingRows ?? []);
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
       <div className="mb-5 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Your rankings</h1>
-          <p className="text-sm text-white/70">Per-genre leaderboard</p>
+          <h1 className="text-2xl font-semibold">Your global ranking</h1>
+          <p className="text-sm text-white/70">Binary-search inserted order is source of truth.</p>
         </div>
         <Link href="/" className="text-sm text-[var(--accent-2)]">
-          Back to genres
+          Add another game
         </Link>
       </div>
 
       <section className="panel mb-4 p-4">
-        <p className="mb-3 text-sm text-white/70">Genre</p>
+        <p className="mb-3 text-sm text-white/70">Filter by genre</p>
         <div className="flex flex-wrap gap-2">
-          {genres.length === 0 ? (
-            <p className="text-sm text-white/70">No rankings yet. Start comparing first.</p>
-          ) : (
-            genres.map((genre) => (
-              <Link
-                key={genre}
-                href={`/rankings?genre=${genre}`}
-                className={`btn text-sm ${genre === selectedGenre ? "btn-primary" : "btn-secondary"}`}
-              >
-                {genre}
-              </Link>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="panel mb-4 p-4">
-        <h2 className="mb-3 text-lg font-medium">Top in {selectedGenre ?? "genre"}</h2>
-        <div className="space-y-2">
-          {(ratings ?? []).map((row, index) => {
-            const game = row.game?.[0];
-            return (
-              <div
-                key={`${game?.name ?? "game"}-${index}`}
-              className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2"
+          <Link
+            href="/rankings"
+            className={`btn text-sm ${!selectedGenre ? "btn-primary" : "btn-secondary"}`}
+          >
+            All
+          </Link>
+          {allGenres.map((genre) => (
+            <Link
+              key={genre}
+              href={`/rankings?genre=${encodeURIComponent(genre)}`}
+              className={`btn text-sm ${genre === selectedGenre ? "btn-primary" : "btn-secondary"}`}
             >
-              <p className="truncate text-sm">
-                <span className="mr-2 text-white/60">#{index + 1}</span>
-                {game?.name ?? "Unknown game"}
-              </p>
-              <p className="text-xs text-white/70">
-                Elo {Math.round(Number(row.rating_mu))} · {row.comparisons_count} battles
-              </p>
-              </div>
-            );
-          })}
-          {(ratings ?? []).length === 0 ? (
-            <p className="text-sm text-white/70">No data in this genre yet.</p>
-          ) : null}
+              {genre}
+            </Link>
+          ))}
         </div>
       </section>
 
       <section className="panel p-4">
-        <h2 className="mb-3 text-lg font-medium">Recently compared winners</h2>
+        <h2 className="mb-3 text-lg font-medium">
+          Ranked games {selectedGenre ? `· ${selectedGenre}` : ""}
+        </h2>
         <div className="space-y-2">
-          {(recent as RecentRow[] | null)?.map((row, index) => {
-            const game = row.game?.[0];
+          {filteredRows.map((row) => {
+            const game = readGame(row.game) as
+              | { id?: string; name?: string; cover_url?: string | null }
+              | null;
             return (
-              <p key={index} className="text-sm text-white/80">
-                {game?.name ?? "Unknown game"} ·{" "}
-                {new Date(row.created_at).toLocaleDateString()}
-              </p>
+              <div
+                key={`${game?.id ?? "game"}-${row.rank_position}`}
+                className="rounded-xl bg-black/20 px-3 py-3"
+              >
+                <div className="flex items-center gap-3">
+                  {game?.cover_url ? (
+                    <Image
+                      src={game.cover_url}
+                      alt={game?.name ?? "Game cover"}
+                      width={44}
+                      height={44}
+                      className="h-11 w-11 rounded-md object-cover"
+                    />
+                  ) : (
+                    <div className="h-11 w-11 rounded-md bg-white/10" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      <span className="mr-2 text-white/60">#{row.rank_position}</span>
+                      {game?.name ?? "Unknown game"}
+                    </p>
+                    <p className="mt-1 text-xs text-white/70">
+                      Score {row.score} · {row.broad_rating}
+                    </p>
+                    {game?.id ? <RerankButton gameId={game.id} /> : null}
+                  </div>
+                </div>
+              </div>
             );
           })}
-          {(recent ?? []).length === 0 ? (
-            <p className="text-sm text-white/70">No recent comparisons yet.</p>
+          {filteredRows.length === 0 ? (
+            <p className="text-sm text-white/70">No ranked games yet. Add one from the home page.</p>
           ) : null}
         </div>
       </section>

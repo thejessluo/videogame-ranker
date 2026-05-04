@@ -8,7 +8,7 @@ export type RawgGenre = {
   slug: string;
 };
 
-type RawgGame = {
+export type RawgGame = {
   id: number;
   name: string;
   slug: string;
@@ -85,6 +85,15 @@ export async function discoverRawgGamesByGenre(genreSlug: string, pageSize = 40)
     ordering: "-added",
   });
 
+  const payload = (await rawgFetch(`/games?${params.toString()}`)) as RawgListResponse<RawgGame>;
+  return payload.results;
+}
+
+export async function searchRawgGames(query: string, pageSize = 10) {
+  const params = new URLSearchParams({
+    search: query,
+    page_size: String(pageSize),
+  });
   const payload = (await rawgFetch(`/games?${params.toString()}`)) as RawgListResponse<RawgGame>;
   return payload.results;
 }

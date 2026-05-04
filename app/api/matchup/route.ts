@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncRawgCatalog } from "@/lib/rawg-sync";
 import { createClient } from "@/lib/supabase/server";
 
 type GameRow = {
@@ -7,6 +8,7 @@ type GameRow = {
   slug: string;
   cover_url: string | null;
   released: string | null;
+  genres_json: Array<{ slug?: string }>;
 };
 
 type RatingRow = {
@@ -16,6 +18,26 @@ type RatingRow = {
 };
 
 export const runtime = "nodejs";
+
+async function loadGamesForGenre(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  genreSlug: string,
+) {
+  const { data: games, error: gamesError } = await supabase
+    .from("games")
+    .select("id,name,slug,cover_url,released,genres_json")
+    .limit(200);
+
+  if (gamesError) {
+    throw new Error(gamesError.message);
+  }
+
+  return (games ?? []).filter((game) =>
+    Array.isArray(game.genres_json)
+      ? game.genres_json.some((genre) => genre?.slug === genreSlug)
+      : false,
+  );
+}
 
 function pickTwoGames(games: GameRow[], ratingsByGameId: Map<string, RatingRow>) {
   const scored = games.map((game) => {
@@ -52,17 +74,18 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: games, error: gamesError } = await supabase
-      .from("games")
-      .select("id,name,slug,cover_url,released")
-      .contains("genres_json", [{ slug: genreSlug }])
-      .limit(80);
+    let gamesInGenre = await loadGamesForGenre(supabase, genreSlug);
 
-    if (gamesError) {
-      return NextResponse.json({ error: gamesError.message }, { status: 500 });
+    if (gamesInGenre.length < 2) {
+      await syncRawgCatalog({
+        supabase,
+        genreSlugs: [genreSlug],
+        perGenreLimit: 40,
+      });
+      gamesInGenre = await loadGamesForGenre(supabase, genreSlug);
     }
 
-    if (!games || games.length < 2) {
+    if (gamesInGenre.length < 2) {
       return NextResponse.json(
         {
           error: "Not enough games in this genre. Run /api/rawg/sync first.",
@@ -71,7 +94,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const gameIds = games.map((game) => game.id);
+    const gameIds = gamesInGenre.map((game) => game.id);
     const { data: ratings, error: ratingsError } = await supabase
       .from("genre_ratings")
       .select("game_id,rating_mu,comparisons_count")
@@ -86,7 +109,7 @@ export async function GET(request: Request) {
     const ratingsByGameId = new Map(
       (ratings ?? []).map((row) => [row.game_id, row as RatingRow]),
     );
-    const pair = pickTwoGames(games as GameRow[], ratingsByGameId);
+    const pair = pickTwoGames(gamesInGenre as GameRow[], ratingsByGameId);
 
     if (pair.length < 2) {
       return NextResponse.json(
