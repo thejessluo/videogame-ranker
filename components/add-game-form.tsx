@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ensureGuestIdForApi, guestIdHeaders } from "@/lib/guest-client";
 
 type SearchGame = {
   rawgId: number;
@@ -59,9 +60,14 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
     broadRating: (typeof broadRatings)[number],
   ) {
     setError(null);
+    await ensureGuestIdForApi();
     const response = await fetch("/api/rankings/add", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...guestIdHeaders(),
+      },
       body: JSON.stringify({
         mode: "rawg",
         broadRating,
@@ -73,8 +79,15 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
       setError(payload.error ?? "Could not add game.");
       return;
     }
+    if (payload.status === "already_ranked") {
+      setError("That game is already in your ranking.");
+      setSelectedCandidate(null);
+      return;
+    }
+    setSelectedCandidate(null);
     if (payload.sessionId) {
       router.push(`/compare?session=${payload.sessionId}`);
+      router.refresh();
       return;
     }
     router.push("/");
@@ -86,9 +99,14 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
     broadRating: (typeof broadRatings)[number],
   ) {
     setError(null);
+    await ensureGuestIdForApi();
     const response = await fetch("/api/rankings/add", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...guestIdHeaders(),
+      },
       body: JSON.stringify({
         mode: "manual",
         broadRating,
@@ -103,8 +121,15 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
       setError(payload.error ?? "Could not add manual game.");
       return;
     }
+    if (payload.status === "already_ranked") {
+      setError("That game is already in your ranking.");
+      setSelectedCandidate(null);
+      return;
+    }
+    setSelectedCandidate(null);
     if (payload.sessionId) {
       router.push(`/compare?session=${payload.sessionId}`);
+      router.refresh();
       return;
     }
     router.push("/");
@@ -212,7 +237,10 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
                 <button
                   type="button"
                   className="btn btn-primary text-sm"
-                  onClick={() => setSelectedCandidate({ type: "rawg", game })}
+                  onClick={() => {
+                    setError(null);
+                    setSelectedCandidate({ type: "rawg", game });
+                  }}
                 >
                   Rank this
                 </button>
@@ -256,6 +284,7 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
               type="button"
               onClick={() => {
                 if (!manualTitle.trim()) return;
+                setError(null);
                 setSelectedCandidate({
                   type: "manual",
                   game: { title: manualTitle.trim(), genres: tags },
@@ -274,7 +303,9 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
         </div>
       ) : null}
 
-      {error ? <p className="mt-4 text-sm text-red-300">{error}</p> : null}
+      {error && !selectedCandidate ? (
+        <p className="mt-4 text-sm text-red-300">{error}</p>
+      ) : null}
 
       {selectedCandidate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -290,12 +321,16 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
               </div>
               <button
                 className="text-white/70"
-                onClick={() => setSelectedCandidate(null)}
+                onClick={() => {
+                  setSelectedCandidate(null);
+                  setError(null);
+                }}
                 aria-label="Close sentiment modal"
               >
                 X
               </button>
             </div>
+            {error ? <p className="mb-3 text-sm text-red-300">{error}</p> : null}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {broadRatings.map((rating) => (
                 <button
@@ -304,12 +339,15 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
                   className="btn btn-secondary text-left capitalize"
                   onClick={async () => {
                     setSubmitting(true);
-                    if (selectedCandidate.type === "rawg") {
-                      await addRawgWithSentiment(selectedCandidate.game, rating);
-                    } else {
-                      await addManualWithSentiment(selectedCandidate.game, rating);
+                    try {
+                      if (selectedCandidate.type === "rawg") {
+                        await addRawgWithSentiment(selectedCandidate.game, rating);
+                      } else {
+                        await addManualWithSentiment(selectedCandidate.game, rating);
+                      }
+                    } finally {
+                      setSubmitting(false);
                     }
-                    setSubmitting(false);
                   }}
                 >
                   {rating}

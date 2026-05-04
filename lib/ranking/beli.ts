@@ -46,7 +46,11 @@ export function scoreFromSentimentOrdinal(
   return roundScore(Math.min(max, Math.max(min, raw)));
 }
 
-/** Ordered list = global rank (best first). Scores are per sentiment group percentiles. */
+/**
+ * Ordered list = absolute rank (best first). Each DB rewrite deletes + reinserts the full list
+ * with rank_position 1..n and fresh scores — scores are never “carried forward” independently of order.
+ * Each score stays inside its row’s sentiment band; only position within that band changes.
+ */
 export function displayScoresForOrderedList<T extends { broad_rating?: string | null }>(
   orderedRows: T[],
 ): number[] {

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatAuthErrorMessage } from "@/lib/auth-error-message";
+import { resetGuestClientCache } from "@/lib/guest-client";
 import { getPublicSiteOrigin } from "@/lib/site-origin";
 
 type Mode = "signin" | "signup";
@@ -44,6 +45,7 @@ export function AuthForm() {
         setMessageVariant("success");
         setMessage("Account created. If email confirmation is enabled, check inbox.");
       } else {
+        resetGuestClientCache();
         router.push("/");
         router.refresh();
       }

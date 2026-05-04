@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { RerankButton } from "@/components/rerank-button";
+import { RemoveFromRankingButton } from "@/components/remove-from-ranking-button";
 import { AuthHeader } from "@/components/auth-header";
 import { fetchMyRankings, type HomeRankingRow } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
@@ -124,7 +125,16 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
                     <p className="mt-1 text-xs text-white/70">
                       Score {row.score} · {row.broad_rating}
                     </p>
-                    {game?.id ? <RerankButton gameId={game.id} /> : null}
+                    {game?.id ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <RerankButton gameId={game.id} inline />
+                        <RemoveFromRankingButton
+                          gameId={game.id}
+                          gameName={game.name ?? "this game"}
+                          inline
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
