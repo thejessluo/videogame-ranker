@@ -2,11 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ensureGuestIdForApi, guestIdHeaders } from "@/lib/guest-client";
 import { RANKING_GUEST_UNAVAILABLE } from "@/lib/ranking/guest-messages";
 import type { BroadRating } from "@/lib/ranking/beli";
+import { GameAboutModal } from "@/components/game-about-modal";
+import { SentimentPickerModal } from "@/components/sentiment-picker-modal";
 
 type SearchGame = {
   rawgId: number;
@@ -16,36 +18,6 @@ type SearchGame = {
   released: string | null;
   genres: Array<{ id?: number; name: string; slug?: string }>;
 };
-
-/** Three tiers + traffic-light swatches (Beli-style). */
-const SENTIMENT_OPTIONS: {
-  rating: BroadRating;
-  label: string;
-  hint: string;
-  swatch: string;
-}[] = [
-  {
-    rating: "liked_it",
-    label: "I liked it!",
-    hint: "I'm locked in",
-    swatch:
-      "bg-[linear-gradient(145deg,#34d399_0%,#059669_100%)] shadow-[inset_0_2px_0_rgba(255,255,255,0.25)]",
-  },
-  {
-    rating: "fine",
-    label: "It was fine",
-    hint: "mid af",
-    swatch:
-      "bg-[linear-gradient(145deg,#fcd34d_0%,#ca8a04_95%)] shadow-[inset_0_2px_0_rgba(255,255,255,0.28)]",
-  },
-  {
-    rating: "didnt_like",
-    label: "I didn't like it",
-    hint: "brb uninstalling",
-    swatch:
-      "bg-[linear-gradient(145deg,#fda4af_0%,#e11d48_95%)] shadow-[inset_0_2px_0_rgba(255,255,255,0.22)]",
-  },
-];
 
 type Candidate =
   | { type: "rawg"; game: SearchGame }
@@ -68,6 +40,7 @@ export function AddGameForm({
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aboutRawgId, setAboutRawgId] = useState<number | null>(null);
   const router = useRouter();
 
   const tags = useMemo(
@@ -79,20 +52,74 @@ export function AddGameForm({
     [manualGenres],
   );
 
+  /** Immediate search (Search button / Enter) — bypasses debounce. */
   async function search() {
-    if (query.trim().length < 2) return;
-    setLoading(true);
-    setError(null);
-    const response = await fetch(`/api/games/search?q=${encodeURIComponent(query.trim())}`);
-    const payload = await response.json().catch(() => ({}));
-    setLoading(false);
-    if (!response.ok) {
-      setError(payload.error ?? "Search failed.");
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setHasSearched(false);
+      setError(null);
+      setLoading(false);
       return;
     }
-    setHasSearched(true);
-    setResults(payload.games ?? []);
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`);
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error ?? "Search failed.");
+        return;
+      }
+      setHasSearched(true);
+      setResults(payload.games ?? []);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  /** Debounced live search while typing (≥2 characters). */
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setHasSearched(false);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setError(null);
+
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      void (async () => {
+        try {
+          const response = await fetch(`/api/games/search?q=${encodeURIComponent(q)}`, {
+            signal: controller.signal,
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setError(payload.error ?? "Search failed.");
+            return;
+          }
+          setHasSearched(true);
+          setResults(payload.games ?? []);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          setError("Search failed.");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, 320);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
 
   async function addRawgWithSentiment(
     game: SearchGame,
@@ -232,9 +259,6 @@ export function AddGameForm({
   return (
     <section className="panel p-4 sm:p-6">
       <h2 className="text-lg font-semibold">Add and rank a game</h2>
-      <p className="mt-1 text-sm text-white/70">
-        Search/select first, then sentiment popup, then comparison placement.
-      </p>
 
       {warnAnonymousRankingUnavailable ? (
         <div
@@ -263,13 +287,21 @@ export function AddGameForm({
         className="mt-4 flex gap-2"
         onSubmit={(event) => {
           event.preventDefault();
+          const q = query.trim();
+          if (q.length < 2) {
+            setResults([]);
+            setHasSearched(false);
+            setError(null);
+            setLoading(false);
+            return;
+          }
           void search();
         }}
       >
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search RAWG (e.g. Hades)"
+          placeholder="Search for a video game (e.g. Hades)"
           className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2"
         />
         <button type="submit" className="btn btn-primary" disabled={loading}>
@@ -294,7 +326,13 @@ export function AddGameForm({
                   <div className="h-11 w-11 rounded-md bg-white/10" />
                 )}
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{game.name}</p>
+                  <button
+                    type="button"
+                    className="block max-w-full truncate text-left font-medium text-white underline-offset-2 hover:text-[var(--accent-2)] hover:underline"
+                    onClick={() => setAboutRawgId(game.rawgId)}
+                  >
+                    {game.name}
+                  </button>
                   <p className="text-xs text-white/70">
                     {game.released ?? "Unknown date"} ·{" "}
                     {game.genres.map((genre) => genre.name).join(", ")}
@@ -375,75 +413,37 @@ export function AddGameForm({
         <p className="mt-4 text-sm text-red-300">{error}</p>
       ) : null}
 
-      {selectedCandidate ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="sentiment-modal-title"
-          aria-describedby="sentiment-modal-desc"
-        >
-          <div className="panel relative w-full max-w-lg overflow-hidden p-6 shadow-2xl shadow-black/40 sm:p-8">
-            <button
-              type="button"
-              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-lg leading-none text-white/55 transition hover:bg-white/10 hover:text-white/90"
-              onClick={() => {
-                setSelectedCandidate(null);
-                setError(null);
-              }}
-              aria-label="Close sentiment modal"
-            >
-              ×
-            </button>
-            <div className="pr-8">
-              <p id="sentiment-modal-desc" className="text-sm font-medium text-white/65">
-                How was it?
-              </p>
-              <h3 id="sentiment-modal-title" className="mt-1 font-serif text-2xl font-semibold tracking-tight text-white sm:text-[1.65rem]">
-                {selectedCandidate.type === "rawg"
-                  ? selectedCandidate.game.name
-                  : selectedCandidate.game.title}
-              </h3>
-            </div>
+      <GameAboutModal rawgId={aboutRawgId} onClose={() => setAboutRawgId(null)} />
 
-            {error ? (
-              <p className="mt-4 rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="mt-6 flex flex-wrap justify-center gap-6 sm:gap-8">
-              {SENTIMENT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.rating}
-                  type="button"
-                  disabled={submitting}
-                  className="group flex w-[6.25rem] shrink-0 flex-col items-center gap-2 rounded-2xl p-2 pb-1 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:opacity-45 sm:w-[6.75rem]"
-                  onClick={async () => {
-                    setSubmitting(true);
-                    try {
-                      if (selectedCandidate.type === "rawg") {
-                        await addRawgWithSentiment(selectedCandidate.game, opt.rating);
-                      } else {
-                        await addManualWithSentiment(selectedCandidate.game, opt.rating);
-                      }
-                    } finally {
-                      setSubmitting(false);
-                    }
-                  }}
-                >
-                  <span
-                    className={`relative h-[4.25rem] w-[4.25rem] rounded-full ring-2 ring-black/25 transition duration-200 group-hover:scale-[1.06] group-hover:ring-white/25 group-active:scale-[0.97] sm:h-[4.75rem] sm:w-[4.75rem] ${opt.swatch}`}
-                    aria-hidden
-                  />
-                  <span className="text-center text-[13px] font-semibold leading-tight text-white">{opt.label}</span>
-                  <span className="text-center text-[11px] leading-snug text-white/45">{opt.hint}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SentimentPickerModal
+        open={Boolean(selectedCandidate)}
+        gameName={
+          selectedCandidate
+            ? selectedCandidate.type === "rawg"
+              ? selectedCandidate.game.name
+              : selectedCandidate.game.title
+            : ""
+        }
+        submitting={submitting}
+        error={selectedCandidate ? error : null}
+        onClose={() => {
+          setSelectedCandidate(null);
+          setError(null);
+        }}
+        onSelect={async (rating) => {
+          if (!selectedCandidate) return;
+          setSubmitting(true);
+          try {
+            if (selectedCandidate.type === "rawg") {
+              await addRawgWithSentiment(selectedCandidate.game, rating);
+            } else {
+              await addManualWithSentiment(selectedCandidate.game, rating);
+            }
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+      />
     </section>
   );
 }

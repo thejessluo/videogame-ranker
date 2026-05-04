@@ -98,6 +98,117 @@ export async function searchRawgGames(query: string, pageSize = 10) {
   return payload.results;
 }
 
+function decodeBasicEntities(text: string): string {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
+/** Strip RAWG HTML description to readable plain text (paragraphs preserved). */
+function rawgDescriptionToPlainText(htmlOrEmpty: string | null | undefined): string | null {
+  const raw = (htmlOrEmpty ?? "").trim();
+  if (!raw) return null;
+  const withBreaks = raw
+    .replace(/\r\n/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  const cleaned = decodeBasicEntities(withBreaks)
+    .split(/\n/)
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return cleaned || null;
+}
+
+export type RawgGameAbout = {
+  id: number;
+  name: string;
+  slug: string;
+  released: string | null;
+  coverUrl: string | null;
+  description: string | null;
+  website: string | null;
+  metacritic: number | null;
+  genres: string[];
+  developers: string[];
+  publishers: string[];
+  platforms: string[];
+  screenshots: string[];
+};
+
+type RawgScreenshotRow = { image: string };
+
+/** Single-game detail + screenshots for the “about” modal (bounded payload). */
+export async function fetchRawgGameAbout(rawgId: number): Promise<RawgGameAbout> {
+  const detail = (await rawgFetch(`/games/${rawgId}`)) as {
+    id?: number;
+    name?: string;
+    slug?: string;
+    released?: string | null;
+    background_image?: string | null;
+    description?: string | null;
+    description_raw?: string | null;
+    website?: string | null;
+    metacritic?: number | null;
+    genres?: Array<{ name?: string }>;
+    developers?: Array<{ name?: string }>;
+    publishers?: Array<{ name?: string }>;
+    platforms?: Array<{ platform?: { name?: string } }>;
+    screenshots?: RawgScreenshotRow[];
+  };
+
+  const descriptionPlain =
+    rawgDescriptionToPlainText(detail.description ?? undefined) ??
+    rawgDescriptionToPlainText(detail.description_raw ?? undefined);
+
+  let screenshots = (detail.screenshots ?? [])
+    .map((row) => row.image)
+    .filter(Boolean);
+
+  if (screenshots.length === 0) {
+    try {
+      const shotPayload = (await rawgFetch(
+        `/games/${rawgId}/screenshots?page_size=12`,
+      )) as { results?: RawgScreenshotRow[] };
+      screenshots = (shotPayload.results ?? []).map((row) => row.image).filter(Boolean);
+    } catch {
+      /* optional enrichment */
+    }
+  }
+
+  const maxShots = 10;
+  screenshots = screenshots.slice(0, maxShots);
+
+  return {
+    id: detail.id ?? rawgId,
+    name: detail.name ?? "Unknown game",
+    slug: detail.slug ?? "",
+    released: detail.released ?? null,
+    coverUrl: detail.background_image ?? null,
+    description: descriptionPlain,
+    website: detail.website?.trim() || null,
+    metacritic: typeof detail.metacritic === "number" ? detail.metacritic : null,
+    genres: (detail.genres ?? []).map((g) => g.name).filter(Boolean) as string[],
+    developers: (detail.developers ?? []).map((d) => d.name).filter(Boolean) as string[],
+    publishers: (detail.publishers ?? []).map((p) => p.name).filter(Boolean) as string[],
+    platforms: (detail.platforms ?? [])
+      .map((row) => row.platform?.name)
+      .filter(Boolean) as string[],
+    screenshots,
+  };
+}
+
 export function toGameRecord(rawgGame: RawgGame) {
   return {
     rawg_id: rawgGame.id,

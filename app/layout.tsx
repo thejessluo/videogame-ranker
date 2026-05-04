@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AuthHeader } from "@/components/auth-header";
+import { AnimatedLadderLogo } from "@/components/animated-ladder-logo";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteHeaderNav } from "@/components/site-header-nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,11 +36,12 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
             <Link
               href="/"
-              className="text-xl font-semibold tracking-tight text-white transition-opacity hover:opacity-90"
+              className="-ml-0.5 flex items-center gap-1 text-xl font-semibold tracking-tight text-white transition-opacity hover:opacity-90"
             >
+              <AnimatedLadderLogo className="h-10 shrink-0 [aspect-ratio:34/38] w-auto" />
               Game Ladder
             </Link>
-            <AuthHeader />
+            <SiteHeaderNav />
           </div>
         </header>
         <div className="flex min-h-0 flex-1 flex-col pb-16">{children}</div>
