@@ -56,7 +56,9 @@ export function AuthForm() {
 
   return (
     <form onSubmit={onSubmit} className="panel w-full max-w-sm p-5 sm:p-6">
-      <h1 className="text-2xl font-semibold">Game Ladder</h1>
+      <h1 className="text-2xl font-semibold">
+        {mode === "signin" ? "Sign in" : "Create account"}
+      </h1>
       <p className="mt-1 text-sm text-white/70">
         Save your genre-specific video game rankings.
       </p>

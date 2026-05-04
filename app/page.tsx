@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AddGameForm } from "@/components/add-game-form";
-import { AuthHeader } from "@/components/auth-header";
 import { HomeNavLinks } from "@/components/home-nav-links";
 import { RankingPreviewBlock } from "@/components/ranking-preview-block";
 import { fetchMyRankings } from "@/lib/ranking/home-data";
@@ -15,15 +14,9 @@ export default async function Home() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
-      <header className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">Game Ladder</h1>
-          <p className="text-sm text-white/70">
-            Rank by comparison, not by rating.
-          </p>
-        </div>
-        <AuthHeader />
-      </header>
+      <p className="mb-6 text-sm text-white/70">
+        Rank by comparison, not by rating.
+      </p>
 
       <HomeNavLinks />
 
