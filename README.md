@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Game Ladder MVP
 
-## Getting Started
+Game Ladder is a mobile-first web app for ranking video games head-to-head inside specific genres (Beli-style, but genre-scoped).
 
-First, run the development server:
+## Stack
+
+- Next.js App Router + Tailwind CSS
+- Supabase Postgres + Auth
+- RAWG API (free tier) for game metadata
+- Elo rating updates per user + genre
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Fill in values in `.env.local`:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `RAWG_API_KEY`
+- optional `RAWG_BASE_URL` (defaults to `https://api.rawg.io/api`)
+
+4. In Supabase SQL Editor, run:
+- `supabase/schema.sql`
+- `supabase/rls.sql`
+
+5. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API Endpoints
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `POST /api/rawg/sync` body: `{ "genreSlug": "action", "limit": 40 }`
+- `GET /api/matchup?genre=action`
+- `POST /api/vote` body: `{ "genreSlug", "gameAId", "gameBId", "winnerGameId" }`
 
-## Learn More
+## MVP Flow
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Sign up or sign in at `/auth`
+2. Pick a genre on `/`
+3. Compare games on `/compare?genre=...`
+4. View rankings at `/rankings`
