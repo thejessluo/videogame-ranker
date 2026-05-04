@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { RerankButton } from "@/components/rerank-button";
 import { RemoveFromRankingButton } from "@/components/remove-from-ranking-button";
-import { AuthHeader } from "@/components/auth-header";
 import { fetchMyRankings, type HomeRankingRow } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -55,18 +54,15 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
           <h1 className="text-2xl font-semibold">Your global ranking</h1>
           <p className="text-sm text-white/70">Binary-search inserted order is source of truth.</p>
         </div>
-        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <AuthHeader />
-          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-end sm:gap-3">
-            {user ? (
-              <Link href="/friends" className="text-sm text-[var(--accent-2)]">
-                Friends
-              </Link>
-            ) : null}
-            <Link href="/" className="text-sm text-[var(--accent-2)]">
-              Add another game
+        <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-end sm:gap-3">
+          {user ? (
+            <Link href="/friends" className="text-sm text-[var(--accent-2)]">
+              Friends
             </Link>
-          </div>
+          ) : null}
+          <Link href="/" className="text-sm text-[var(--accent-2)]">
+            Add another game
+          </Link>
         </div>
       </div>
 

@@ -90,7 +90,7 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
       router.refresh();
       return;
     }
-    router.push("/");
+    router.push("/rankings");
     router.refresh();
   }
 
@@ -132,7 +132,7 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
       router.refresh();
       return;
     }
-    router.push("/");
+    router.push("/rankings");
     router.refresh();
   }
 
