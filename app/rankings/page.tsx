@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { broadRatingDisplayLabel } from "@/lib/ranking/beli";
 import { RerankButton } from "@/components/rerank-button";
 import { RemoveFromRankingButton } from "@/components/remove-from-ranking-button";
 import { fetchMyRankings, type HomeRankingRow } from "@/lib/ranking/home-data";
@@ -119,7 +120,7 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
                       {game?.name ?? "Unknown game"}
                     </p>
                     <p className="mt-1 text-xs text-white/70">
-                      Score {row.score} · {row.broad_rating}
+                      Score {row.score} · {broadRatingDisplayLabel(row.broad_rating)}
                     </p>
                     {game?.id ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2">

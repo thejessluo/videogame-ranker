@@ -4,6 +4,7 @@ import { HomeNavLinks } from "@/components/home-nav-links";
 import { RankingPreviewBlock } from "@/components/ranking-preview-block";
 import { fetchMyRankings } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
+import { hasServiceRoleConfig } from "@/lib/supabase/admin";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -11,6 +12,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
   const top10 = await fetchMyRankings(10);
+  const guestRankingConfigured = hasServiceRoleConfig();
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:py-8">
@@ -27,7 +29,10 @@ export default async function Home() {
         </p>
       ) : null}
 
-      <AddGameForm allowBookmarks={Boolean(user)} />
+      <AddGameForm
+        allowBookmarks={Boolean(user)}
+        warnAnonymousRankingUnavailable={!user && !guestRankingConfigured}
+      />
 
       <div className="mt-6">
         <RankingPreviewBlock

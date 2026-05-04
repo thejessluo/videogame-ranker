@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   displayScoresForOrderedList,
-  initialBoundsFromSentiment,
+  normalizeBroadRating,
   scoreFromSentimentOrdinal,
-  type BroadRating,
+  tierInsertInclusiveBounds,
 } from "@/lib/ranking/beli";
 import { resolveRankingDbCtx } from "@/lib/ranking/request-actor";
+import { RANKING_GUEST_UNAVAILABLE } from "@/lib/ranking/guest-messages";
+import { applyGlobalRankingOrder } from "@/lib/ranking/session-engine";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 type RerankBody = {
@@ -28,8 +30,7 @@ export async function POST(request: Request) {
       if (!admin) {
         return NextResponse.json(
           {
-            error:
-              "Sign in to continue, or set SUPABASE_SERVICE_ROLE_KEY on the server for anonymous rankings.",
+            error: RANKING_GUEST_UNAVAILABLE,
           },
           { status: 503 },
         );
@@ -62,20 +63,7 @@ export async function POST(request: Request) {
     }
 
     const remaining = fullRanked.filter((row) => row.game_id !== body.gameId);
-    const scores = displayScoresForOrderedList(remaining);
-    const rebuiltPayload = remaining.map((row, index) => ({
-      ...ownerRow,
-      list_scope: "global",
-      list_key: "all",
-      game_id: row.game_id,
-      rank_position: index + 1,
-      score: scores[index]!,
-      status: row.status ?? "played",
-      broad_rating: row.broad_rating ?? "okay",
-      notes: row.notes ?? null,
-      tags: row.tags ?? [],
-      updated_at: new Date().toISOString(),
-    }));
+    const br = normalizeBroadRating(target.broad_rating);
 
     const { error: deleteError } = await ctx.client
       .from(rankingsTable)
@@ -84,11 +72,6 @@ export async function POST(request: Request) {
       .eq("list_scope", "global")
       .eq("list_key", "all");
     if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
-
-    if (rebuiltPayload.length > 0) {
-      const { error: rebuildError } = await ctx.client.from(rankingsTable).insert(rebuiltPayload);
-      if (rebuildError) return NextResponse.json({ error: rebuildError.message }, { status: 500 });
-    }
 
     if (remaining.length === 0) {
       const { error: singleInsertError } = await ctx.client.from(rankingsTable).insert({
@@ -99,7 +82,7 @@ export async function POST(request: Request) {
         rank_position: 1,
         score: scoreFromSentimentOrdinal(0, 1, target.broad_rating),
         status: target.status ?? "played",
-        broad_rating: target.broad_rating ?? "okay",
+        broad_rating: target.broad_rating ?? "fine",
         notes: target.notes ?? null,
         tags: target.tags ?? [],
       });
@@ -109,10 +92,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: "reranked_directly" });
     }
 
-    const bounds = initialBoundsFromSentiment(
-      remaining.length,
-      target.broad_rating as BroadRating,
-    );
+    const { minG, maxG } = tierInsertInclusiveBounds(remaining, br);
+
+    if (minG === maxG) {
+      const merged = [
+        ...remaining.map((r) => ({
+          game_id: r.game_id,
+          status: r.status ?? "played",
+          broad_rating: r.broad_rating,
+          notes: r.notes,
+          tags: r.tags ?? [],
+        })),
+      ];
+      merged.splice(minG, 0, {
+        game_id: target.game_id,
+        status: target.status ?? "played",
+        broad_rating: target.broad_rating,
+        notes: target.notes,
+        tags: target.tags ?? [],
+      });
+      await applyGlobalRankingOrder(ctx, merged);
+      return NextResponse.json({ status: "reranked_directly" });
+    }
+
+    const scores = displayScoresForOrderedList(remaining);
+    const rebuiltPayload = remaining.map((row, index) => ({
+      ...ownerRow,
+      list_scope: "global",
+      list_key: "all",
+      game_id: row.game_id,
+      rank_position: index + 1,
+      score: scores[index]!,
+      status: row.status ?? "played",
+      broad_rating: row.broad_rating ?? "fine",
+      notes: row.notes ?? null,
+      tags: row.tags ?? [],
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: rebuildError } = await ctx.client.from(rankingsTable).insert(rebuiltPayload);
+    if (rebuildError) return NextResponse.json({ error: rebuildError.message }, { status: 500 });
+
     const { data: session, error: sessionError } = await ctx.client
       .from(sessionsTable)
       .insert({
@@ -120,9 +140,9 @@ export async function POST(request: Request) {
         game_id: target.game_id,
         list_scope: "global",
         list_key: "all",
-        low: bounds.low,
-        high: Math.min(bounds.high, remaining.length - 1),
-        broad_rating: target.broad_rating,
+        low: 0,
+        high: Math.max(0, remaining.length - 1),
+        broad_rating: br,
         status: target.status,
         notes: target.notes ?? null,
         tags: target.tags ?? [],

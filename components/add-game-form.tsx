@@ -1,9 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ensureGuestIdForApi, guestIdHeaders } from "@/lib/guest-client";
+import { RANKING_GUEST_UNAVAILABLE } from "@/lib/ranking/guest-messages";
+import type { BroadRating } from "@/lib/ranking/beli";
 
 type SearchGame = {
   rawgId: number;
@@ -14,12 +17,48 @@ type SearchGame = {
   genres: Array<{ id?: number; name: string; slug?: string }>;
 };
 
-const broadRatings = ["loved", "liked", "okay", "disliked", "hated"] as const;
+/** Three tiers + traffic-light swatches (Beli-style). */
+const SENTIMENT_OPTIONS: {
+  rating: BroadRating;
+  label: string;
+  hint: string;
+  swatch: string;
+}[] = [
+  {
+    rating: "liked_it",
+    label: "I liked it!",
+    hint: "I'm locked in",
+    swatch:
+      "bg-[linear-gradient(145deg,#34d399_0%,#059669_100%)] shadow-[inset_0_2px_0_rgba(255,255,255,0.25)]",
+  },
+  {
+    rating: "fine",
+    label: "It was fine",
+    hint: "mid af",
+    swatch:
+      "bg-[linear-gradient(145deg,#fcd34d_0%,#ca8a04_95%)] shadow-[inset_0_2px_0_rgba(255,255,255,0.28)]",
+  },
+  {
+    rating: "didnt_like",
+    label: "I didn't like it",
+    hint: "brb uninstalling",
+    swatch:
+      "bg-[linear-gradient(145deg,#fda4af_0%,#e11d48_95%)] shadow-[inset_0_2px_0_rgba(255,255,255,0.22)]",
+  },
+];
+
 type Candidate =
   | { type: "rawg"; game: SearchGame }
   | { type: "manual"; game: { title: string; genres: string[] } };
 
-export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boolean }) {
+export function AddGameForm({
+  allowBookmarks = false,
+  warnAnonymousRankingUnavailable = false,
+}: {
+  allowBookmarks?: boolean;
+  /** Server knows env; show before user wastes a click on sentiment. */
+  warnAnonymousRankingUnavailable?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchGame[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,7 +96,7 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
 
   async function addRawgWithSentiment(
     game: SearchGame,
-    broadRating: (typeof broadRatings)[number],
+    broadRating: BroadRating,
   ) {
     setError(null);
     await ensureGuestIdForApi();
@@ -76,7 +115,10 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(payload.error ?? "Could not add game.");
+      setError(
+        payload.error ??
+          (response.status === 503 ? RANKING_GUEST_UNAVAILABLE : "Could not add game."),
+      );
       return;
     }
     if (payload.status === "already_ranked") {
@@ -96,7 +138,7 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
 
   async function addManualWithSentiment(
     game: { title: string; genres: string[] },
-    broadRating: (typeof broadRatings)[number],
+    broadRating: BroadRating,
   ) {
     setError(null);
     await ensureGuestIdForApi();
@@ -118,7 +160,10 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(payload.error ?? "Could not add manual game.");
+      setError(
+        payload.error ??
+          (response.status === 503 ? RANKING_GUEST_UNAVAILABLE : "Could not add manual game."),
+      );
       return;
     }
     if (payload.status === "already_ranked") {
@@ -190,6 +235,29 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
       <p className="mt-1 text-sm text-white/70">
         Search/select first, then sentiment popup, then comparison placement.
       </p>
+
+      {warnAnonymousRankingUnavailable ? (
+        <div
+          className="mt-4 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm leading-relaxed text-amber-100/95"
+          role="status"
+        >
+          <p>
+            Anonymous rankings aren’t available here yet — add{" "}
+            <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[13px] text-white/90">
+              SUPABASE_SERVICE_ROLE_KEY
+            </code>{" "}
+            to <code className="rounded bg-black/35 px-1.5 py-0.5 font-mono text-[13px]">.env.local</code>{" "}
+            (Supabase → Project Settings → API → <span className="whitespace-nowrap">service_role</span>), or{" "}
+            <Link
+              href="/auth"
+              className="font-medium text-[var(--accent-2)] underline decoration-white/25 underline-offset-2"
+            >
+              sign in
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
 
       <form
         className="mt-4 flex gap-2"
@@ -308,49 +376,68 @@ export function AddGameForm({ allowBookmarks = false }: { allowBookmarks?: boole
       ) : null}
 
       {selectedCandidate ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="panel w-full max-w-md p-5">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm text-white/70">How was it?</p>
-                <h3 className="text-xl font-semibold">
-                  {selectedCandidate.type === "rawg"
-                    ? selectedCandidate.game.name
-                    : selectedCandidate.game.title}
-                </h3>
-              </div>
-              <button
-                className="text-white/70"
-                onClick={() => {
-                  setSelectedCandidate(null);
-                  setError(null);
-                }}
-                aria-label="Close sentiment modal"
-              >
-                X
-              </button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sentiment-modal-title"
+          aria-describedby="sentiment-modal-desc"
+        >
+          <div className="panel relative w-full max-w-lg overflow-hidden p-6 shadow-2xl shadow-black/40 sm:p-8">
+            <button
+              type="button"
+              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-lg leading-none text-white/55 transition hover:bg-white/10 hover:text-white/90"
+              onClick={() => {
+                setSelectedCandidate(null);
+                setError(null);
+              }}
+              aria-label="Close sentiment modal"
+            >
+              ×
+            </button>
+            <div className="pr-8">
+              <p id="sentiment-modal-desc" className="text-sm font-medium text-white/65">
+                How was it?
+              </p>
+              <h3 id="sentiment-modal-title" className="mt-1 font-serif text-2xl font-semibold tracking-tight text-white sm:text-[1.65rem]">
+                {selectedCandidate.type === "rawg"
+                  ? selectedCandidate.game.name
+                  : selectedCandidate.game.title}
+              </h3>
             </div>
-            {error ? <p className="mb-3 text-sm text-red-300">{error}</p> : null}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {broadRatings.map((rating) => (
+
+            {error ? (
+              <p className="mt-4 rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap justify-center gap-6 sm:gap-8">
+              {SENTIMENT_OPTIONS.map((opt) => (
                 <button
-                  key={rating}
+                  key={opt.rating}
+                  type="button"
                   disabled={submitting}
-                  className="btn btn-secondary text-left capitalize"
+                  className="group flex w-[6.25rem] shrink-0 flex-col items-center gap-2 rounded-2xl p-2 pb-1 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:opacity-45 sm:w-[6.75rem]"
                   onClick={async () => {
                     setSubmitting(true);
                     try {
                       if (selectedCandidate.type === "rawg") {
-                        await addRawgWithSentiment(selectedCandidate.game, rating);
+                        await addRawgWithSentiment(selectedCandidate.game, opt.rating);
                       } else {
-                        await addManualWithSentiment(selectedCandidate.game, rating);
+                        await addManualWithSentiment(selectedCandidate.game, opt.rating);
                       }
                     } finally {
                       setSubmitting(false);
                     }
                   }}
                 >
-                  {rating}
+                  <span
+                    className={`relative h-[4.25rem] w-[4.25rem] rounded-full ring-2 ring-black/25 transition duration-200 group-hover:scale-[1.06] group-hover:ring-white/25 group-active:scale-[0.97] sm:h-[4.75rem] sm:w-[4.75rem] ${opt.swatch}`}
+                    aria-hidden
+                  />
+                  <span className="text-center text-[13px] font-semibold leading-tight text-white">{opt.label}</span>
+                  <span className="text-center text-[11px] leading-snug text-white/45">{opt.hint}</span>
                 </button>
               ))}
             </div>

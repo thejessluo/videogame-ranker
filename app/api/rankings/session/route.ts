@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { RANKING_GUEST_UNAVAILABLE } from "@/lib/ranking/guest-messages";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { resolveRankingDbCtx } from "@/lib/ranking/request-actor";
 import { runRankingSessionGet, runRankingSessionPost } from "@/lib/ranking/session-engine";
@@ -19,8 +20,7 @@ export async function GET(request: Request) {
       if (!admin) {
         return NextResponse.json(
           {
-            error:
-              "Sign in to continue, or set SUPABASE_SERVICE_ROLE_KEY on the server for anonymous rankings.",
+            error: RANKING_GUEST_UNAVAILABLE,
           },
           { status: 503 },
         );
@@ -46,8 +46,7 @@ export async function POST(request: Request) {
       if (!admin) {
         return NextResponse.json(
           {
-            error:
-              "Sign in to continue, or set SUPABASE_SERVICE_ROLE_KEY on the server for anonymous rankings.",
+            error: RANKING_GUEST_UNAVAILABLE,
           },
           { status: 503 },
         );

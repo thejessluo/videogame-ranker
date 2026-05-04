@@ -63,23 +63,11 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
         loading: false,
         error: null,
         done: true,
-        resultMessage: "Done! Your game was inserted into your ranking.",
-        needsFollowup: false,
-        newGame: null,
-        comparedGame: null,
-        progress: null,
-      });
-      return;
-    }
-
-    if (payload.status === "no_comparable_games") {
-      setState({
-        loading: false,
-        error: null,
-        done: true,
         resultMessage:
-          payload.message ?? "No comparable games found yet, so this game was not placed.",
-        needsFollowup: true,
+          typeof payload.message === "string"
+            ? payload.message
+            : "Done! Your game was inserted into your ranking.",
+        needsFollowup: false,
         newGame: null,
         comparedGame: null,
         progress: null,
@@ -141,6 +129,24 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
         done: true,
         resultMessage: payload.message ?? "Skipped. Game was not auto-placed.",
         needsFollowup: true,
+        newGame: null,
+        comparedGame: null,
+        progress: null,
+      });
+      return;
+    }
+
+    if (payload.status === "done") {
+      setSubmitting(false);
+      setState({
+        loading: false,
+        error: null,
+        done: true,
+        resultMessage:
+          typeof payload.message === "string"
+            ? payload.message
+            : "Done! Your game was inserted into your ranking.",
+        needsFollowup: false,
         newGame: null,
         comparedGame: null,
         progress: null,

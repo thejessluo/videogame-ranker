@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { broadRatingDisplayLabel } from "@/lib/ranking/beli";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -156,7 +157,7 @@ export default async function FriendProfilePage({ params, searchParams }: Friend
                       {game?.name ?? "Unknown game"}
                     </p>
                     <p className="mt-1 text-xs text-white/70">
-                      Score {row.score} · {row.broad_rating}
+                      Score {row.score} · {broadRatingDisplayLabel(row.broad_rating)}
                     </p>
                   </div>
                 </div>
