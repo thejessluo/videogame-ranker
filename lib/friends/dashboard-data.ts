@@ -1,4 +1,5 @@
 import type { createClient } from "@/lib/supabase/server";
+import { syncProfileUsernameFromMetadata } from "@/lib/profile/sync-username-from-metadata";
 
 type AppSupabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -31,6 +32,8 @@ export async function getFriendsDashboard(
   supabase: AppSupabase,
   userId: string,
 ): Promise<{ data: FriendsDashboardPayload | null; error: string | null }> {
+  await syncProfileUsernameFromMetadata(supabase, userId);
+
   const { data: meProfile, error: meError } = await supabase
     .from("user_profiles")
     .select("id,username")
