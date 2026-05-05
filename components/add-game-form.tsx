@@ -26,10 +26,12 @@ type Candidate =
 export function AddGameForm({
   allowBookmarks = false,
   warnAnonymousRankingUnavailable = false,
+  rankingsHref = "/rankings",
 }: {
   allowBookmarks?: boolean;
   /** Server knows env; show before user wastes a click on sentiment. */
   warnAnonymousRankingUnavailable?: boolean;
+  rankingsHref?: string;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchGame[]>([]);
@@ -124,6 +126,7 @@ export function AddGameForm({
   async function addRawgWithSentiment(
     game: SearchGame,
     broadRating: BroadRating,
+    note?: string,
   ) {
     setError(null);
     await ensureGuestIdForApi();
@@ -137,6 +140,7 @@ export function AddGameForm({
       body: JSON.stringify({
         mode: "rawg",
         broadRating,
+        notes: note?.trim() ? note.trim().slice(0, 100) : undefined,
         rawgGame: game,
       }),
     });
@@ -159,13 +163,14 @@ export function AddGameForm({
       router.refresh();
       return;
     }
-    router.push("/rankings");
+    router.push(rankingsHref);
     router.refresh();
   }
 
   async function addManualWithSentiment(
     game: { title: string; genres: string[] },
     broadRating: BroadRating,
+    note?: string,
   ) {
     setError(null);
     await ensureGuestIdForApi();
@@ -179,6 +184,7 @@ export function AddGameForm({
       body: JSON.stringify({
         mode: "manual",
         broadRating,
+        notes: note?.trim() ? note.trim().slice(0, 100) : undefined,
         manualGame: {
           title: game.title,
           genres: game.genres,
@@ -204,7 +210,7 @@ export function AddGameForm({
       router.refresh();
       return;
     }
-    router.push("/rankings");
+    router.push(rankingsHref);
     router.refresh();
   }
 
@@ -426,18 +432,19 @@ export function AddGameForm({
         }
         submitting={submitting}
         error={selectedCandidate ? error : null}
+        enableNoteStep
         onClose={() => {
           setSelectedCandidate(null);
           setError(null);
         }}
-        onSelect={async (rating) => {
+        onSelect={async (rating, note) => {
           if (!selectedCandidate) return;
           setSubmitting(true);
           try {
             if (selectedCandidate.type === "rawg") {
-              await addRawgWithSentiment(selectedCandidate.game, rating);
+              await addRawgWithSentiment(selectedCandidate.game, rating, note);
             } else {
-              await addManualWithSentiment(selectedCandidate.game, rating);
+              await addManualWithSentiment(selectedCandidate.game, rating, note);
             }
           } finally {
             setSubmitting(false);

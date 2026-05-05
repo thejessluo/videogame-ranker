@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { BroadRating } from "@/lib/ranking/beli";
 import { SENTIMENT_OPTIONS } from "@/lib/ranking/sentiment-options";
 
@@ -8,8 +9,9 @@ type Props = {
   gameName: string;
   submitting: boolean;
   error: string | null;
+  enableNoteStep?: boolean;
   onClose: () => void;
-  onSelect: (rating: BroadRating) => void | Promise<void>;
+  onSelect: (rating: BroadRating, note?: string) => void | Promise<void>;
 };
 
 export function SentimentPickerModal({
@@ -17,10 +19,24 @@ export function SentimentPickerModal({
   gameName,
   submitting,
   error,
+  enableNoteStep = false,
   onClose,
   onSelect,
 }: Props) {
+  const [selectedRating, setSelectedRating] = useState<BroadRating | null>(null);
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedRating(null);
+      setNote("");
+    }
+  }, [open]);
+
   if (!open) return null;
+
+  const trimmedNote = note.trim();
+  const noteText = trimmedNote.length > 0 ? trimmedNote.slice(0, 100) : "";
 
   return (
     <div
@@ -63,8 +79,16 @@ export function SentimentPickerModal({
               key={opt.rating}
               type="button"
               disabled={submitting}
-              className="group flex w-[6.25rem] shrink-0 flex-col items-center gap-2 rounded-2xl p-2 pb-1 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:opacity-45 sm:w-[6.75rem]"
-              onClick={() => void onSelect(opt.rating)}
+              className={`group flex w-[6.25rem] shrink-0 flex-col items-center gap-2 rounded-2xl p-2 pb-1 transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:pointer-events-none disabled:opacity-45 sm:w-[6.75rem] ${
+                selectedRating === opt.rating ? "bg-white/[0.08]" : ""
+              }`}
+              onClick={() => {
+                if (enableNoteStep) {
+                  setSelectedRating(opt.rating);
+                  return;
+                }
+                void onSelect(opt.rating);
+              }}
             >
               <span
                 className={`relative h-[4.25rem] w-[4.25rem] rounded-full ring-2 ring-black/25 transition duration-200 group-hover:scale-[1.06] group-hover:ring-white/25 group-active:scale-[0.97] sm:h-[4.75rem] sm:w-[4.75rem] ${opt.swatch}`}
@@ -75,6 +99,29 @@ export function SentimentPickerModal({
             </button>
           ))}
         </div>
+
+        {enableNoteStep && selectedRating ? (
+          <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4">
+            <p className="text-sm font-medium text-white/85">Optional note / mini-review</p>
+            <textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value.slice(0, 100))}
+              maxLength={100}
+              rows={3}
+              placeholder="What stood out to you?"
+              className="mt-2 w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/40"
+            />
+            <p className="mt-1 text-right text-xs text-white/55">{note.length}/100</p>
+            <button
+              type="button"
+              className="btn btn-primary mt-3 w-full"
+              disabled={submitting}
+              onClick={() => void onSelect(selectedRating, noteText)}
+            >
+              {submitting ? "Ranking..." : "Rank it!"}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

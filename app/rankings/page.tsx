@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { RankingGameRows } from "@/components/ranking-game-rows";
 import {
   ShareRankingButton,
   ShareRankingPlaceholder,
 } from "@/components/share-ranking-button";
-import { syncProfileUsernameFromMetadata } from "@/lib/profile/sync-username-from-metadata";
+import { getProfileUsername } from "@/lib/profile/get-profile-username";
 import { fetchMyRankings, type HomeRankingRow } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,13 +30,12 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
 
   let profileUsername: string | null = null;
   if (user) {
-    const synced = await syncProfileUsernameFromMetadata(supabase, user.id);
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle();
-    profileUsername = profile?.username?.trim() || synced || null;
+    profileUsername = await getProfileUsername(supabase, user.id);
+    if (profileUsername) {
+      const genre = params.genre?.trim();
+      const qs = genre ? `?genre=${encodeURIComponent(genre)}` : "";
+      redirect(`/u/${encodeURIComponent(profileUsername)}${qs}`);
+    }
   }
 
   const rankingRows = (await fetchMyRankings()) as HomeRankingRow[];

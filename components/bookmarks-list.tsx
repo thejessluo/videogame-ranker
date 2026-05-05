@@ -30,7 +30,13 @@ function toGame(game: Bookmark["game"]) {
   return game;
 }
 
-export function BookmarksList({ initialBookmarks }: { initialBookmarks: Bookmark[] }) {
+export function BookmarksList({
+  initialBookmarks,
+  rankingsHref = "/rankings",
+}: {
+  initialBookmarks: Bookmark[];
+  rankingsHref?: string;
+}) {
   const router = useRouter();
   const [bookmarks, setBookmarks] = useState(initialBookmarks);
   const [rankTarget, setRankTarget] = useState<{
@@ -91,7 +97,7 @@ export function BookmarksList({ initialBookmarks }: { initialBookmarks: Bookmark
       }
 
       await removeBookmark(bookmarkId);
-      router.push("/rankings");
+      router.push(rankingsHref);
       router.refresh();
     } finally {
       setRankSubmitting(false);

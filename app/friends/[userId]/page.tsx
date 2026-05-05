@@ -134,32 +134,40 @@ export default async function FriendProfilePage({ params, searchParams }: Friend
             const game = readGame(row.game) as
               | { id?: string; name?: string; cover_url?: string | null }
               | null;
+            const existingNote = row.notes?.trim() ?? "";
             return (
               <div
                 key={`${game?.id ?? "game"}-${row.rank_position}`}
                 className="rounded-xl bg-black/20 px-3 py-3"
               >
                 <div className="flex items-center gap-3">
-                  {game?.cover_url ? (
-                    <Image
-                      src={game.cover_url}
-                      alt={game?.name ?? "Game cover"}
-                      width={44}
-                      height={44}
-                      className="h-11 w-11 rounded-md object-cover"
-                    />
-                  ) : (
-                    <div className="h-11 w-11 rounded-md bg-white/10" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      <span className="mr-2 text-white/60">#{row.rank_position}</span>
-                      {game?.name ?? "Unknown game"}
-                    </p>
-                    <p className="mt-1 text-xs text-white/70">
-                      Score {row.score} · {broadRatingDisplayLabel(row.broad_rating)}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    {game?.cover_url ? (
+                      <Image
+                        src={game.cover_url}
+                        alt={game?.name ?? "Game cover"}
+                        width={44}
+                        height={44}
+                        className="h-11 w-11 rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="h-11 w-11 rounded-md bg-white/10" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        <span className="mr-2 text-white/60">#{row.rank_position}</span>
+                        {game?.name ?? "Unknown game"}
+                      </p>
+                      <p className="mt-1 text-xs text-white/70">
+                        Score {row.score} · {broadRatingDisplayLabel(row.broad_rating)}
+                      </p>
+                    </div>
                   </div>
+                  {existingNote ? (
+                    <div className="flex flex-1 justify-center px-3">
+                      <p className="text-center text-xs text-white/88 sm:text-sm">&ldquo;{existingNote}&rdquo;</p>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );

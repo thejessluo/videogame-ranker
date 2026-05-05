@@ -108,6 +108,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as AddBody;
+    const normalizedNotes = body.notes?.trim().slice(0, 100) || null;
 
     const gameResult = await resolveGameId(ctx, body);
     if (!gameResult.ok) {
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
         score: scoreFromSentimentOrdinal(0, 1, body.broadRating),
         status: "played",
         broad_rating: body.broadRating,
-        notes: body.notes ?? null,
+        notes: normalizedNotes,
         tags: body.tags ?? [],
       });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
         game_id: gameId,
         status: "played" as const,
         broad_rating: body.broadRating,
-        notes: body.notes ?? null,
+        notes: normalizedNotes,
         tags: body.tags ?? [],
       };
       const merged = [...base];
@@ -198,7 +199,7 @@ export async function POST(request: Request) {
         high: Math.max(0, current.length - 1),
         broad_rating: body.broadRating,
         status: "played",
-        notes: body.notes ?? null,
+        notes: normalizedNotes,
         tags: body.tags ?? [],
       })
       .select("id")

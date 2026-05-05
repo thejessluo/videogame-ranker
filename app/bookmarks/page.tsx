@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BookmarksList } from "@/components/bookmarks-list";
+import { getProfileUsername } from "@/lib/profile/get-profile-username";
 import { createClient } from "@/lib/supabase/server";
 
 type BookmarkRow = {
@@ -31,6 +32,8 @@ export default async function BookmarksPage() {
   if (!user) {
     redirect("/auth");
   }
+  const profileUsername = await getProfileUsername(supabase, user.id);
+  const rankingsHref = profileUsername ? `/u/${encodeURIComponent(profileUsername)}` : "/rankings";
 
   const { data: bookmarks } = await supabase
     .from("user_game_bookmarks")
@@ -51,7 +54,10 @@ export default async function BookmarksPage() {
       </div>
 
       <section className="panel p-4">
-        <BookmarksList initialBookmarks={(bookmarks ?? []) as BookmarkRow[]} />
+        <BookmarksList
+          initialBookmarks={(bookmarks ?? []) as BookmarkRow[]}
+          rankingsHref={rankingsHref}
+        />
       </section>
     </main>
   );

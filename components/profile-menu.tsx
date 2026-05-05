@@ -29,6 +29,7 @@ export function ProfileMenu({ username, email }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const label = username ? username : email ? (email.split("@")[0] ?? "Profile") : "Profile";
+  const profileHref = username ? `/u/${encodeURIComponent(username)}` : "/rankings";
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -74,6 +75,14 @@ export function ProfileMenu({ username, email }: Props) {
             role="menu"
             className="rounded-xl border border-white/12 bg-[var(--surface)] py-1 shadow-xl ring-1 ring-black/40"
           >
+            <Link
+              role="menuitem"
+              href={profileHref}
+              className="block px-3 py-2.5 text-sm text-white/85 transition hover:bg-white/10"
+              onClick={close}
+            >
+              Profile
+            </Link>
             <Link
               role="menuitem"
               href="/friends"

@@ -26,7 +26,13 @@ type State = {
   progress: string | null;
 };
 
-export function CompareClient({ sessionId }: { sessionId: string }) {
+export function CompareClient({
+  sessionId,
+  rankingsHref = "/rankings",
+}: {
+  sessionId: string;
+  rankingsHref?: string;
+}) {
   const [state, setState] = useState<State>({
     loading: true,
     error: null,
@@ -266,7 +272,7 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
           </div>
         ) : null}
         <Link
-          href="/rankings"
+          href={rankingsHref}
           className="group inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] underline-offset-[5px] decoration-[var(--accent)]/50 hover:underline"
         >
           View your rankings
@@ -387,7 +393,7 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
         >
           Too different / skip
         </button>
-        <Link href="/rankings" className="text-[var(--accent-2)] hover:underline">
+        <Link href={rankingsHref} className="text-[var(--accent-2)] hover:underline">
           View rankings
         </Link>
       </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AddGameForm } from "@/components/add-game-form";
 import { RankingPreviewBlock } from "@/components/ranking-preview-block";
+import { getProfileUsername } from "@/lib/profile/get-profile-username";
 import { fetchMyRankings } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
 import { hasServiceRoleConfig } from "@/lib/supabase/admin";
@@ -10,6 +11,8 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const profileUsername = user ? await getProfileUsername(supabase, user.id) : null;
+  const rankingsHref = profileUsername ? `/u/${encodeURIComponent(profileUsername)}` : "/rankings";
   const top5 = await fetchMyRankings(5);
   const guestRankingConfigured = hasServiceRoleConfig();
 
@@ -22,12 +25,13 @@ export default async function Home() {
       <AddGameForm
         allowBookmarks={Boolean(user)}
         warnAnonymousRankingUnavailable={!user && !guestRankingConfigured}
+        rankingsHref={rankingsHref}
       />
 
       <div className="mt-6">
         <div className="mb-4 flex justify-end">
           <Link
-            href="/rankings"
+            href={rankingsHref}
             className="group inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] underline-offset-[5px] decoration-[var(--accent)]/50 hover:underline"
           >
             See all your rankings
@@ -46,7 +50,7 @@ export default async function Home() {
 
       <p className="mt-6 text-center text-sm text-white/60">
         Tip:{" "}
-        <Link href="/rankings" className="text-[var(--accent-2)]">
+        <Link href={rankingsHref} className="text-[var(--accent-2)]">
           open the full ranking page
         </Link>{" "}
         for genre filters and the complete list.
