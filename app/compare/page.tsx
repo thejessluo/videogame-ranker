@@ -15,9 +15,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-xl px-4 py-6">
-      <h1 className="mb-1 text-2xl font-semibold">Compare</h1>
-      <p className="mb-5 text-sm text-white/70">Pick the game you liked more in each round.</p>
+    <main className="mx-auto w-full max-w-3xl px-4 py-6">
+      <h1 className="mb-5 text-2xl font-semibold">Compare</h1>
       <CompareClient sessionId={sessionId} />
     </main>
   );

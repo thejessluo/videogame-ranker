@@ -10,6 +10,9 @@ type GameCard = {
   name: string;
   cover_url?: string | null;
   genres_json?: Array<{ name?: string }>;
+  /** Present on the existing-list game in a matchup. */
+  rankPosition?: number | null;
+  listScore?: number | null;
 };
 
 type State = {
@@ -286,48 +289,99 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-white/70">
-        Which did you like more?
-      </p>
-      {state.progress ? <p className="text-xs text-white/60">Position search: {state.progress}</p> : null}
+  const newGame = state.newGame;
+  const comparedGame = state.comparedGame;
+  const genreLine = (game: GameCard) =>
+    (game.genres_json ?? [])
+      .map((genre) => genre.name)
+      .filter(Boolean)
+      .join(", ");
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {[state.newGame, state.comparedGame].map((game, index) => (
-          <div key={game.id} className="panel p-3">
-            {game.cover_url ? (
-              <Image
-                src={game.cover_url}
-                alt={game.name}
-                width={300}
-                height={180}
-                className="mb-2 h-32 w-full rounded-lg object-cover"
-              />
-            ) : null}
-            <p className="truncate text-base font-semibold">{game.name}</p>
-            <p className="mt-1 text-xs text-white/70">
-              {(game.genres_json ?? [])
-                .map((genre) => genre.name)
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-            <button
-              className="btn btn-primary mt-3 w-full"
-              onClick={() => vote(index === 0 ? "new" : "existing")}
-              disabled={submitting}
-            >
-              Prefer {index === 0 ? "left" : "right"}
-            </button>
-          </div>
-        ))}
+  const comparedMeta =
+    comparedGame.rankPosition != null || comparedGame.listScore != null ? (
+      <p className="mt-2 text-sm font-medium text-emerald-300/95">
+        {comparedGame.rankPosition != null ? `#${comparedGame.rankPosition}` : null}
+        {comparedGame.rankPosition != null && comparedGame.listScore != null ? " · " : null}
+        {comparedGame.listScore != null ? comparedGame.listScore.toFixed(1) : null}
+      </p>
+    ) : null;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-base font-medium text-white/95">Which do you prefer?</p>
+        {state.progress ? (
+          <p className="mt-1 text-xs text-white/55">Position search: {state.progress}</p>
+        ) : null}
       </div>
 
-      <div className="flex items-center justify-between text-sm">
-        <button className="text-white/70" onClick={() => vote("skip")} disabled={submitting}>
+      {/* Stacked on small screens; side-by-side from lg so phones/tablets portrait stay vertical */}
+      <div className="flex flex-col items-stretch gap-0 lg:flex-row lg:items-stretch lg:gap-3">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => vote("new")}
+          className="group flex min-h-[140px] flex-1 flex-col rounded-2xl border border-white/20 bg-black/25 p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:bg-black/35 disabled:pointer-events-none disabled:opacity-55 lg:min-h-[220px]"
+        >
+          {newGame.cover_url ? (
+            <Image
+              src={newGame.cover_url}
+              alt={newGame.name}
+              width={400}
+              height={220}
+              className="mb-3 h-28 w-full rounded-xl object-cover lg:h-36"
+            />
+          ) : (
+            <div className="mb-3 h-28 rounded-xl bg-white/10 lg:h-36" />
+          )}
+          <p className="text-lg font-semibold leading-snug text-white">{newGame.name}</p>
+          <p className="mt-1 text-sm text-white/55">{genreLine(newGame) || "—"}</p>
+        </button>
+
+        <div className="relative flex min-h-12 shrink-0 items-center justify-center py-3 lg:w-16 lg:min-h-0 lg:py-8">
+          <span
+            className="relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-[var(--accent)] bg-zinc-950 text-[11px] font-bold uppercase tracking-wide text-white shadow-lg ring-4 ring-black/40"
+            aria-hidden
+          >
+            or
+          </span>
+        </div>
+
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => vote("existing")}
+          className="group flex min-h-[140px] flex-1 flex-col rounded-2xl border border-white/20 bg-black/25 p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:bg-black/35 disabled:pointer-events-none disabled:opacity-55 lg:min-h-[220px]"
+        >
+          {comparedGame.cover_url ? (
+            <Image
+              src={comparedGame.cover_url}
+              alt={comparedGame.name}
+              width={400}
+              height={220}
+              className="mb-3 h-28 w-full rounded-xl object-cover lg:h-36"
+            />
+          ) : (
+            <div className="mb-3 h-28 rounded-xl bg-white/10 lg:h-36" />
+          )}
+          <p className="text-lg font-semibold leading-snug text-white">{comparedGame.name}</p>
+          <p className="mt-1 text-sm text-white/55">{genreLine(comparedGame) || "—"}</p>
+          {comparedMeta}
+        </button>
+      </div>
+
+      <p className="text-center text-xs text-white/50">Tap the game you liked more</p>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-sm">
+        <button
+          type="button"
+          className="rounded-full px-3 py-2 text-white/70 transition hover:bg-white/10 hover:text-white"
+          onClick={() => vote("skip")}
+          disabled={submitting}
+        >
           Too different / skip
         </button>
-        <Link href="/rankings" className="text-[var(--accent-2)]">
+        <Link href="/rankings" className="text-[var(--accent-2)] hover:underline">
           View rankings
         </Link>
       </div>
