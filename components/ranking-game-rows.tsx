@@ -188,7 +188,9 @@ export function RankingGameRows({
                   </div>
                 ) : existingNote ? (
                   <div className="flex flex-1 justify-center px-3">
-                    <p className="text-center text-xs text-white/88 sm:text-sm">&ldquo;{existingNote}&rdquo;</p>
+                    <p className="text-center text-[11px] italic text-sky-200/65 sm:text-xs">
+                      &ldquo;{existingNote}&rdquo;
+                    </p>
                   </div>
                 ) : null}
               </div>
