@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const rankingsTable = ctx.mode === "user" ? "user_game_rankings" : "guest_game_rankings";
     const ownerCol = ctx.mode === "user" ? "user_id" : "guest_id";
     const ownerId = ctx.mode === "user" ? ctx.userId : ctx.guestId;
-    const normalizedNote = body.notes?.trim().slice(0, 100) || null;
+    const normalizedNote = body.notes?.trim().slice(0, 140) || null;
 
     const { data: rankedRow, error: rankedError } = await ctx.client
       .from(rankingsTable)

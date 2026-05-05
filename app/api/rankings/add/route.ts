@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as AddBody;
-    const normalizedNotes = body.notes?.trim().slice(0, 100) || null;
+    const normalizedNotes = body.notes?.trim().slice(0, 140) || null;
 
     const gameResult = await resolveGameId(ctx, body);
     if (!gameResult.ok) {
