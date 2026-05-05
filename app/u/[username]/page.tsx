@@ -13,6 +13,9 @@ type Props = {
   searchParams: Promise<{ genre?: string }>;
 };
 
+/** Session/cookies must be read per request so friend CTA is not cached as anonymous. */
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username: raw } = await params;
   const handle = raw.trim().toLowerCase();
