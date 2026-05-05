@@ -125,14 +125,14 @@ export function RankingGameRows({
                     <div className="w-full max-w-sm rounded-lg border border-white/10 bg-black/25 p-2">
                       <textarea
                         value={noteDraft}
-                        onChange={(event) => setNoteDraft(event.target.value.slice(0, 100))}
-                        maxLength={100}
+                        onChange={(event) => setNoteDraft(event.target.value.slice(0, 140))}
+                        maxLength={140}
                         rows={3}
                         className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-xs text-white placeholder:text-white/45"
-                        placeholder="Optional note (max 100 chars)"
+                        placeholder="Optional note (max 140 chars)"
                       />
                       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[11px] text-white/55">{noteDraft.length}/100</span>
+                        <span className="text-[11px] text-white/55">{noteDraft.length}/140</span>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -163,7 +163,7 @@ export function RankingGameRows({
                                 },
                                 body: JSON.stringify({
                                   gameId: game.id,
-                                  notes: noteDraft.trim().slice(0, 100),
+                                  notes: noteDraft.trim().slice(0, 140),
                                 }),
                               });
                               const payload = await response.json().catch(() => ({}));
