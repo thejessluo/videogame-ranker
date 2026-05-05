@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFriendsDashboard } from "@/lib/friends/dashboard-data";
+import { searchFriendCandidates } from "@/lib/friends/search-friend-candidates";
 import { createClient } from "@/lib/supabase/server";
 
 type FriendAction =
@@ -50,19 +51,30 @@ export async function POST(request: Request) {
         return NextResponse.json({ users: [] });
       }
 
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select("id,username")
-        .ilike("username", `%${query}%`)
-        .neq("id", user.id)
-        .limit(20);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ users: data ?? [] });
+      const { users, error: searchError } = await searchFriendCandidates(user.id, query);
+      if (searchError) {
+        return NextResponse.json({ error: searchError }, { status: 500 });
+      }
+      return NextResponse.json({ users });
     }
 
     if (body.action === "send_request") {
       if (!body.toUserId || body.toUserId === user.id) {
         return NextResponse.json({ error: "Invalid recipient." }, { status: 400 });
+      }
+
+      const pair = orderedPair(user.id, body.toUserId);
+      const { data: alreadyFriends } = await supabase
+        .from("friendships")
+        .select("id")
+        .eq("user_a_id", pair.user_a_id)
+        .eq("user_b_id", pair.user_b_id)
+        .maybeSingle();
+      if (alreadyFriends) {
+        return NextResponse.json(
+          { error: "You are already friends with this person." },
+          { status: 400 },
+        );
       }
 
       const { data: reverse } = await supabase
@@ -98,7 +110,19 @@ export async function POST(request: Request) {
         { onConflict: "from_user_id,to_user_id" },
       );
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ status: "requested" });
+
+      const { data: pendingRow } = await supabase
+        .from("friend_requests")
+        .select("id")
+        .eq("from_user_id", user.id)
+        .eq("to_user_id", body.toUserId)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      return NextResponse.json({
+        status: "requested",
+        requestId: pendingRow?.id ?? null,
+      });
     }
 
     if (body.action === "respond_request") {

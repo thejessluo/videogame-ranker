@@ -224,6 +224,24 @@ as $$
   );
 $$;
 
+-- Exact email lookup for friend search (server service role only).
+create or replace function public.find_user_by_email(lookup_email text)
+returns table (id uuid, username text)
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select p.id, p.username
+  from auth.users u
+  inner join public.user_profiles p on p.id = u.id
+  where lower(btrim(lookup_email)) = lower(btrim(u.email::text));
+$$;
+
+revoke all on function public.find_user_by_email(text) from public;
+revoke all on function public.find_user_by_email(text) from anon, authenticated;
+grant execute on function public.find_user_by_email(text) to service_role;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql

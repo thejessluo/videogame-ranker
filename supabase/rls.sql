@@ -52,6 +52,24 @@ create policy "user_profiles_update_own"
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
 
+-- Pending friend request: each party can read the other's profile (username for UI).
+drop policy if exists "user_profiles_select_friend_request_pending_party" on public.user_profiles;
+create policy "user_profiles_select_friend_request_pending_party"
+  on public.user_profiles
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.friend_requests fr
+      where fr.status = 'pending'
+        and (
+          (fr.from_user_id = (select auth.uid()) and fr.to_user_id = user_profiles.id)
+          or (fr.to_user_id = (select auth.uid()) and fr.from_user_id = user_profiles.id)
+        )
+    )
+  );
+
 drop policy if exists "comparisons_select_own_or_friend" on public.comparisons;
 create policy "comparisons_select_own_or_friend"
   on public.comparisons
@@ -235,6 +253,13 @@ create policy "friend_requests_update_parties"
   to authenticated
   using ((select auth.uid()) in (from_user_id, to_user_id))
   with check ((select auth.uid()) in (from_user_id, to_user_id));
+
+drop policy if exists "friend_requests_delete_parties" on public.friend_requests;
+create policy "friend_requests_delete_parties"
+  on public.friend_requests
+  for delete
+  to authenticated
+  using ((select auth.uid()) in (from_user_id, to_user_id));
 
 drop policy if exists "friendships_select_members" on public.friendships;
 create policy "friendships_select_members"

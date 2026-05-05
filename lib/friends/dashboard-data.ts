@@ -41,6 +41,32 @@ export async function getFriendsDashboard(
     .maybeSingle();
   if (meError) return { data: null, error: meError.message };
 
+  const { data: friendshipRows, error: friendsError } = await supabase
+    .from("friendships")
+    .select("id,created_at,user_a_id,user_b_id")
+    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
+    .order("created_at", { ascending: false });
+  if (friendsError) return { data: null, error: friendsError.message };
+
+  const friendIds =
+    friendshipRows?.map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id)) ??
+    [];
+
+  if (friendIds.length > 0) {
+    await supabase
+      .from("friend_requests")
+      .delete()
+      .eq("from_user_id", userId)
+      .in("to_user_id", friendIds)
+      .eq("status", "pending");
+    await supabase
+      .from("friend_requests")
+      .delete()
+      .eq("to_user_id", userId)
+      .in("from_user_id", friendIds)
+      .eq("status", "pending");
+  }
+
   const { data: incoming, error: incomingError } = await supabase
     .from("friend_requests")
     .select("id,status,created_at,from_user_id")
@@ -57,16 +83,6 @@ export async function getFriendsDashboard(
     .order("created_at", { ascending: false });
   if (outgoingError) return { data: null, error: outgoingError.message };
 
-  const { data: friends, error: friendsError } = await supabase
-    .from("friendships")
-    .select("id,created_at,user_a_id,user_b_id")
-    .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
-    .order("created_at", { ascending: false });
-  if (friendsError) return { data: null, error: friendsError.message };
-
-  const friendIds =
-    friends?.map((row) => (row.user_a_id === userId ? row.user_b_id : row.user_a_id)) ?? [];
-
   let friendProfiles: FriendProfileSummary[] = [];
   if (friendIds.length > 0) {
     const { data: profiles, error: profilesError } = await supabase
@@ -77,11 +93,15 @@ export async function getFriendsDashboard(
     friendProfiles = profiles ?? [];
   }
 
+  const friendIdSet = new Set(friendIds);
+  const incomingFiltered = (incoming ?? []).filter((row) => !friendIdSet.has(row.from_user_id));
+  const outgoingFiltered = (outgoing ?? []).filter((row) => !friendIdSet.has(row.to_user_id));
+
   const incomingIds = Array.from(
-    new Set((incoming ?? []).map((row) => row.from_user_id).filter(Boolean)),
+    new Set(incomingFiltered.map((row) => row.from_user_id).filter(Boolean)),
   ) as string[];
   const outgoingIds = Array.from(
-    new Set((outgoing ?? []).map((row) => row.to_user_id).filter(Boolean)),
+    new Set(outgoingFiltered.map((row) => row.to_user_id).filter(Boolean)),
   ) as string[];
   const profileIds = Array.from(new Set([...incomingIds, ...outgoingIds]));
 
@@ -98,11 +118,11 @@ export async function getFriendsDashboard(
   return {
     data: {
       me: meProfile ?? { id: userId, username: null },
-      incoming: (incoming ?? []).map((row) => ({
+      incoming: incomingFiltered.map((row) => ({
         ...row,
         from_user: profilesById[row.from_user_id] ?? null,
       })),
-      outgoing: (outgoing ?? []).map((row) => ({
+      outgoing: outgoingFiltered.map((row) => ({
         ...row,
         to_user: profilesById[row.to_user_id] ?? null,
       })),
