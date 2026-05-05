@@ -140,7 +140,7 @@ export function AddGameForm({
       body: JSON.stringify({
         mode: "rawg",
         broadRating,
-        notes: note?.trim() ? note.trim().slice(0, 100) : undefined,
+        notes: note?.trim() ? note.trim().slice(0, 140) : undefined,
         rawgGame: game,
       }),
     });
@@ -184,7 +184,7 @@ export function AddGameForm({
       body: JSON.stringify({
         mode: "manual",
         broadRating,
-        notes: note?.trim() ? note.trim().slice(0, 100) : undefined,
+        notes: note?.trim() ? note.trim().slice(0, 140) : undefined,
         manualGame: {
           title: game.title,
           genres: game.genres,

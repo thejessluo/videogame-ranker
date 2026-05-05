@@ -36,7 +36,7 @@ export function SentimentPickerModal({
   if (!open) return null;
 
   const trimmedNote = note.trim();
-  const noteText = trimmedNote.length > 0 ? trimmedNote.slice(0, 100) : "";
+  const noteText = trimmedNote.length > 0 ? trimmedNote.slice(0, 140) : "";
 
   return (
     <div
@@ -105,13 +105,13 @@ export function SentimentPickerModal({
             <p className="text-sm font-medium text-white/85">Optional note / mini-review</p>
             <textarea
               value={note}
-              onChange={(event) => setNote(event.target.value.slice(0, 100))}
-              maxLength={100}
+              onChange={(event) => setNote(event.target.value.slice(0, 140))}
+              maxLength={140}
               rows={3}
               placeholder="What stood out to you?"
               className="mt-2 w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/40"
             />
-            <p className="mt-1 text-right text-xs text-white/55">{note.length}/100</p>
+            <p className="mt-1 text-right text-xs text-white/55">{note.length}/140</p>
             <button
               type="button"
               className="btn btn-primary mt-3 w-full"
