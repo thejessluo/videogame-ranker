@@ -140,8 +140,16 @@ export default async function FriendProfilePage({ params, searchParams }: Friend
                 key={`${game?.id ?? "game"}-${row.rank_position}`}
                 className="rounded-xl bg-black/20 px-3 py-3"
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
-                  <div className="flex min-w-0 w-full flex-1 items-start gap-3 sm:min-w-0 sm:flex-[2] sm:basis-0">
+                <div
+                  className={
+                    existingNote
+                      ? "grid grid-cols-1 gap-3 sm:grid-cols-[19rem_minmax(0,1fr)] sm:items-stretch sm:gap-x-4 sm:gap-y-3"
+                      : "flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3"
+                  }
+                >
+                  <div
+                    className={`flex min-w-0 w-full items-start gap-3 ${existingNote ? "sm:h-full sm:max-w-none" : "shrink-0"}`}
+                  >
                     {game?.cover_url ? (
                       <Image
                         src={game.cover_url}
@@ -164,12 +172,10 @@ export default async function FriendProfilePage({ params, searchParams }: Friend
                     </div>
                   </div>
                   {existingNote ? (
-                    <div className="w-full min-w-0 sm:flex sm:min-w-0 sm:flex-1 sm:basis-0 sm:justify-center sm:self-center sm:px-3">
-                      <div className="max-sm:-mx-0.5 max-sm:overflow-x-auto max-sm:px-0.5 max-sm:pb-0.5 sm:overflow-visible">
-                        <p className="text-center text-[11px] italic text-sky-200/65 sm:text-xs max-sm:inline-block max-sm:whitespace-nowrap max-sm:text-left sm:[text-wrap:balance] sm:whitespace-normal">
-                          &ldquo;{existingNote}&rdquo;
-                        </p>
-                      </div>
+                    <div className="flex h-full min-h-0 w-full min-w-0 items-center justify-start">
+                      <p className="w-full min-w-0 break-words text-left text-[11px] italic text-sky-200/65 max-sm:[text-wrap:pretty] sm:text-xs">
+                        &ldquo;{existingNote}&rdquo;
+                      </p>
                     </div>
                   ) : null}
                 </div>
