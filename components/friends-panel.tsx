@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   FriendProfileSummary,
@@ -33,6 +33,8 @@ export function FriendsPanel({
 
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchRequestSeq = useRef(0);
 
   const [incoming, setIncoming] = useState<IncomingFriendRequest[]>(initialIncoming);
   const [outgoing, setOutgoing] = useState<OutgoingFriendRequest[]>(initialOutgoing);
@@ -74,21 +76,55 @@ export function FriendsPanel({
     setUsernameMessage(`Saved @${payload.username}`);
   }
 
-  async function runSearch() {
-    if (!canSearch) return;
-    setError(null);
-    const response = await fetch("/api/friends", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "search", query: search.trim() }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      setError(payload.error ?? "Search failed.");
+  async function runSearch(queryOverride?: string) {
+    const query = (queryOverride ?? search).trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
       return;
     }
-    setSearchResults(payload.users ?? []);
+    const requestId = ++searchRequestSeq.current;
+    setError(null);
+    setSearchLoading(true);
+    try {
+      const response = await fetch("/api/friends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "search", query }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (requestId !== searchRequestSeq.current) return;
+      if (!response.ok) {
+        setError(payload.error ?? "Search failed.");
+        return;
+      }
+      setSearchResults(payload.users ?? []);
+    } catch {
+      if (requestId !== searchRequestSeq.current) return;
+      setError("Search failed.");
+    } finally {
+      if (requestId === searchRequestSeq.current) {
+        setSearchLoading(false);
+      }
+    }
   }
+
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void runSearch(trimmed);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [search]);
 
   async function sendRequest(toUserId: string) {
     setError(null);
@@ -158,17 +194,23 @@ export function FriendsPanel({
           Friends find you by username (lowercase, letters/numbers/underscore). Your public share
           link is <span className="text-white/85">/u/yourname</span>.
         </p>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <form
+          className="mt-3 flex flex-col gap-2 sm:flex-row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveUsername();
+          }}
+        >
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
             placeholder="e.g. jessplays"
             className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2"
           />
-          <button className="btn btn-primary" onClick={saveUsername}>
+          <button type="submit" className="btn btn-primary">
             Save
           </button>
-        </div>
+        </form>
         {usernameMessage ? <p className="mt-2 text-sm text-white/80">{usernameMessage}</p> : null}
       </section>
 
@@ -177,17 +219,23 @@ export function FriendsPanel({
         <p className="mt-1 text-sm text-white/60">
           Search by username (partial match) or exact email address.
         </p>
-        <div className="mt-3 flex gap-2">
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runSearch();
+          }}
+        >
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Username or email"
             className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2"
           />
-          <button className="btn btn-primary" onClick={runSearch} disabled={!canSearch}>
-            Search
+          <button type="submit" className="btn btn-primary" disabled={!canSearch || searchLoading}>
+            {searchLoading ? "..." : "Search"}
           </button>
-        </div>
+        </form>
 
         {searchResults.length > 0 ? (
           <div className="mt-3 space-y-2">

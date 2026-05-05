@@ -53,7 +53,7 @@ export function ShareRankingButton({ username }: Props) {
         title="Copy link to your public ranking"
       >
         <ShareIcon className="h-[1.1rem] w-[1.1rem]" />
-        Share ranking
+        Share profile
       </button>
       {status === "copied" ? (
         <span className="text-xs text-emerald-300/90">Copied to clipboard</span>

@@ -10,7 +10,7 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const top10 = await fetchMyRankings(10);
+  const top5 = await fetchMyRankings(5);
   const guestRankingConfigured = hasServiceRoleConfig();
 
   return (
@@ -30,16 +30,17 @@ export default async function Home() {
             href="/rankings"
             className="group inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] underline-offset-[5px] decoration-[var(--accent)]/50 hover:underline"
           >
-            See all global rankings
+            See all your rankings
             <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
               →
             </span>
           </Link>
         </div>
         <RankingPreviewBlock
-          rows={top10}
-          title="Your top 10 games"
+          rows={top5}
+          title="Your top 5 games"
           emptyMessage="No games ranked yet. Add one above."
+          showSentiment={false}
         />
       </div>
 

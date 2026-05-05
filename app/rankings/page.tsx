@@ -65,9 +65,9 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Your global ranking</h1>
+          <h1 className="text-2xl font-semibold">Your game rankings</h1>
         </div>
-        <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-start sm:gap-4">
+        <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:gap-4">
           {user ? (
             profileUsername ? (
               <ShareRankingButton username={profileUsername} />

@@ -6,12 +6,14 @@ export function RankingPreviewBlock({
   title,
   emptyMessage,
   showRowActions = false,
+  showSentiment = true,
 }: {
   rows: HomeRankingRow[];
   title: string;
   emptyMessage: string;
   /** Re-rank / remove — use on the full rankings page; keep off the home preview. */
   showRowActions?: boolean;
+  showSentiment?: boolean;
 }) {
   return (
     <section className="panel p-4 sm:p-6">
@@ -19,7 +21,7 @@ export function RankingPreviewBlock({
       {rows.length === 0 ? (
         <p className="text-sm text-white/70">{emptyMessage}</p>
       ) : (
-        <RankingGameRows rows={rows} showRowActions={showRowActions} />
+        <RankingGameRows rows={rows} showRowActions={showRowActions} showSentiment={showSentiment} />
       )}
     </section>
   );

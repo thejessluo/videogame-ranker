@@ -17,9 +17,11 @@ function readGame(value: unknown) {
 export function RankingGameRows({
   rows,
   showRowActions = false,
+  showSentiment = true,
 }: {
   rows: HomeRankingRow[];
   showRowActions?: boolean;
+  showSentiment?: boolean;
 }) {
   const [aboutRawgId, setAboutRawgId] = useState<number | null>(null);
 
@@ -77,11 +79,13 @@ export function RankingGameRows({
                     )}
                   </p>
                   <p className="mt-1 text-xs text-white/70">
-                    Score {row.score} · {broadRatingDisplayLabel(row.broad_rating)}
+                    {showSentiment
+                      ? `Score ${row.score} · ${broadRatingDisplayLabel(row.broad_rating)}`
+                      : `Score ${row.score}`}
                   </p>
                   {showRowActions && game?.id ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <RerankButton gameId={game.id} inline />
+                      <RerankButton gameId={game.id} gameName={game.name ?? "this game"} inline />
                       <RemoveFromRankingButton
                         gameId={game.id}
                         gameName={game.name ?? "this game"}
