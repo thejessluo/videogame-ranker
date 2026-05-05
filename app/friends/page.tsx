@@ -29,7 +29,7 @@ export default async function FriendsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Friends</h1>
           <p className="text-sm text-white/70">
-            Add people by username, then open their rankings and bookmarks.
+            Add people by username or email, then open their shared page from your friends list.
           </p>
         </div>
         <Link href="/" className="text-sm text-[var(--accent-2)]">

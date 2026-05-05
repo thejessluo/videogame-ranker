@@ -174,11 +174,14 @@ export function FriendsPanel({
 
       <section className="panel p-4 sm:p-6">
         <h2 className="text-lg font-semibold">Find friends</h2>
+        <p className="mt-1 text-sm text-white/60">
+          Search by username (partial match) or exact email address.
+        </p>
         <div className="mt-3 flex gap-2">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search username"
+            placeholder="Username or email"
             className="w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2"
           />
           <button className="btn btn-primary" onClick={runSearch} disabled={!canSearch}>
@@ -260,7 +263,14 @@ export function FriendsPanel({
           ) : (
             friends.map((friend) => (
               <div key={friend.id} className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2">
-                <Link href={`/friends/${friend.id}`} className="text-sm font-medium text-[var(--accent-2)]">
+                <Link
+                  href={
+                    friend.username
+                      ? `/u/${encodeURIComponent(friend.username)}`
+                      : `/friends/${friend.id}`
+                  }
+                  className="text-sm font-medium text-[var(--accent-2)]"
+                >
                   {friend.username ? `@${friend.username}` : friend.id}
                 </Link>
                 <button className="btn btn-secondary !px-3 !py-1 text-xs" onClick={() => unfriend(friend.id)}>

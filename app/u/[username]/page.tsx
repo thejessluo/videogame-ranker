@@ -2,8 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PublicProfileFriendCta } from "@/components/public-profile-friend-cta";
+import { getPublicProfileFriendCtaInitial } from "@/lib/friends/public-profile-cta";
 import { broadRatingDisplayLabel } from "@/lib/ranking/beli";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 type Props = {
   params: Promise<{ username: string }>;
@@ -52,6 +55,16 @@ export default async function PublicRankingPage({ params, searchParams }: Props)
 
   const userId = profile.id;
 
+  const supabase = await createClient();
+  const {
+    data: { user: viewer },
+  } = await supabase.auth.getUser();
+  const friendCtaInitial = await getPublicProfileFriendCtaInitial(
+    supabase,
+    viewer?.id ?? null,
+    userId,
+  );
+
   const { data: rankingRows } = await admin
     .from("user_game_rankings")
     .select(
@@ -89,16 +102,34 @@ export default async function PublicRankingPage({ params, searchParams }: Props)
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-6">
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">
             @{displayName}&apos;s ranking
           </h1>
           <p className="mt-1 text-sm text-white/70">Shared game ladder · read-only</p>
+          {friendCtaInitial.kind !== "signed_out" && friendCtaInitial.kind !== "self" ? (
+            <div className="mt-3">
+              <PublicProfileFriendCta profileUserId={userId} initial={friendCtaInitial} />
+            </div>
+          ) : null}
         </div>
-        <Link href="/" className="text-sm text-[var(--accent-2)]">
-          Game Ladder home
-        </Link>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          {friendCtaInitial.kind === "signed_out" ? (
+            <p className="text-sm text-white/60">
+              <Link href="/auth" className="text-[var(--accent-2)]">
+                Sign in
+              </Link>{" "}
+              to add this person as a friend.
+            </p>
+          ) : null}
+          {friendCtaInitial.kind === "self" ? (
+            <p className="text-sm text-white/60">This is your public share page.</p>
+          ) : null}
+          <Link href="/" className="text-sm text-[var(--accent-2)]">
+            Game Ladder home
+          </Link>
+        </div>
       </div>
 
       <section className="panel mb-4 p-4">
