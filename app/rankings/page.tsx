@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { RankingGameRows } from "@/components/ranking-game-rows";
+import {
+  ShareRankingButton,
+  ShareRankingPlaceholder,
+} from "@/components/share-ranking-button";
+import { syncProfileUsernameFromMetadata } from "@/lib/profile/sync-username-from-metadata";
 import { fetchMyRankings, type HomeRankingRow } from "@/lib/ranking/home-data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -21,6 +26,17 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  let profileUsername: string | null = null;
+  if (user) {
+    const synced = await syncProfileUsernameFromMetadata(supabase, user.id);
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    profileUsername = profile?.username?.trim() || synced || null;
+  }
 
   const rankingRows = (await fetchMyRankings()) as HomeRankingRow[];
 
@@ -50,16 +66,23 @@ export default async function RankingsPage({ searchParams }: RankingsPageProps) 
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Your global ranking</h1>
-          <p className="text-sm text-white/70">Binary-search inserted order is source of truth.</p>
         </div>
-        <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-end sm:gap-3">
+        <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-start sm:gap-4">
           {user ? (
-            <Link href="/friends" className="text-sm text-[var(--accent-2)]">
-              Friends
-            </Link>
+            profileUsername ? (
+              <ShareRankingButton username={profileUsername} />
+            ) : (
+              <ShareRankingPlaceholder />
+            )
           ) : null}
-          <Link href="/" className="text-sm text-[var(--accent-2)]">
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] underline-offset-[5px] decoration-[var(--accent)]/50 hover:underline"
+          >
             Add another game
+            <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
+              →
+            </span>
           </Link>
         </div>
       </div>

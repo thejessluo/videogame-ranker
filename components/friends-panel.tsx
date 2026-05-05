@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   FriendProfileSummary,
@@ -26,6 +26,10 @@ export function FriendsPanel({
 }: FriendsPanelProps) {
   const [username, setUsername] = useState(initialUsername);
   const [usernameMessage, setUsernameMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUsername(initialUsername);
+  }, [initialUsername]);
 
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
@@ -151,7 +155,8 @@ export function FriendsPanel({
       <section className="panel p-4 sm:p-6">
         <h2 className="text-lg font-semibold">Your username</h2>
         <p className="mt-1 text-sm text-white/70">
-          Friends find you by username (lowercase, letters/numbers/underscore).
+          Friends find you by username (lowercase, letters/numbers/underscore). Your public share
+          link is <span className="text-white/85">/u/yourname</span>.
         </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
