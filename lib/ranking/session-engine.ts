@@ -14,6 +14,7 @@ type AnswerBody = {
 type RankedRow = {
   game_id: string;
   rank_position?: number;
+  score?: number | string | null;
   status: string;
   broad_rating: string;
   notes: string | null;
@@ -425,13 +426,26 @@ export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string)
     return { status: "done" as const };
   }
 
+  const comparedGamePayload = (() => {
+    const g = normalizeGame(compared.game);
+    if (!g) return null;
+    const rawScore = compared.score;
+    const listScore =
+      rawScore !== undefined && rawScore !== null ? Number(rawScore) : null;
+    return {
+      ...g,
+      rankPosition: compared.rank_position ?? null,
+      listScore: Number.isFinite(listScore ?? NaN) ? listScore : null,
+    };
+  })();
+
   return {
     status: "comparing" as const,
     low: bounds.low,
     high: bounds.high,
     mid,
     newGame,
-    comparedGame: normalizeGame(compared.game),
+    comparedGame: comparedGamePayload,
     progress: `${Math.max(1, mid + 1)} / ${Math.max(1, tierComparable.length)}`,
   };
 }
