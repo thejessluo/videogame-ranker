@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Orbitron } from "next/font/google";
 import { AnimatedLadderLogo } from "@/components/animated-ladder-logo";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeaderNav } from "@/components/site-header-nav";
@@ -14,6 +14,11 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const orbitronBold = Orbitron({
+  subsets: ["latin"],
+  weight: "700",
 });
 
 export const metadata: Metadata = {
@@ -36,7 +41,7 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
             <Link
               href="/"
-              className="-ml-0.5 flex items-center gap-1 text-xl font-semibold tracking-tight text-white transition-opacity hover:opacity-90"
+              className={`-ml-0.5 flex items-center gap-1 text-xl tracking-tight text-white transition-opacity hover:opacity-90 ${orbitronBold.className}`}
             >
               <AnimatedLadderLogo className="h-10 shrink-0 [aspect-ratio:34/38] w-auto" />
               Game Ladder
