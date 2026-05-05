@@ -60,32 +60,32 @@ export function RankingGameRows({
               key={`${game?.id ?? "game"}-${row.rank_position}`}
               className="rounded-xl bg-black/20 px-3 py-3"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-3">
+                <div className="flex min-w-0 w-full flex-1 items-start gap-3 sm:min-w-0 sm:flex-[2] sm:basis-0">
                   {game?.cover_url ? (
                     <Image
                       src={game.cover_url}
                       alt={game?.name ?? "Game cover"}
                       width={44}
                       height={44}
-                      className="h-11 w-11 rounded-md object-cover"
+                      className="h-11 w-11 shrink-0 rounded-md object-cover"
                     />
                   ) : (
-                    <div className="h-11 w-11 rounded-md bg-white/10" />
+                    <div className="h-11 w-11 shrink-0 rounded-md bg-white/10" />
                   )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      <span className="mr-2 text-white/60">#{row.rank_position}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-medium [text-wrap:pretty]">
+                      <span className="mr-2 shrink-0 text-white/60">#{row.rank_position}</span>
                       {rawgOk ? (
                         <button
                           type="button"
-                          className="text-left font-medium text-white underline-offset-2 hover:text-[var(--accent-2)] hover:underline"
+                          className="whitespace-normal text-left font-medium text-white underline-offset-2 hover:text-[var(--accent-2)] hover:underline"
                           onClick={() => setAboutRawgId(Math.trunc(rid))}
                         >
                           {game?.name ?? "Unknown game"}
                         </button>
                       ) : (
-                        <span>{game?.name ?? "Unknown game"}</span>
+                        <span className="whitespace-normal">{game?.name ?? "Unknown game"}</span>
                       )}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
@@ -121,8 +121,8 @@ export function RankingGameRows({
                   </div>
                 </div>
                 {isEditing ? (
-                  <div className="flex flex-1 justify-center px-3">
-                    <div className="w-full max-w-sm rounded-lg border border-white/10 bg-black/25 p-2">
+                  <div className="w-full min-w-0 sm:flex sm:min-w-0 sm:flex-1 sm:basis-0 sm:justify-center sm:px-3">
+                    <div className="w-full max-w-sm rounded-lg border border-white/10 bg-black/25 p-2 sm:mx-auto">
                       <textarea
                         value={noteDraft}
                         onChange={(event) => setNoteDraft(event.target.value.slice(0, 140))}
@@ -187,10 +187,12 @@ export function RankingGameRows({
                     </div>
                   </div>
                 ) : existingNote ? (
-                  <div className="flex flex-1 justify-center px-3">
-                    <p className="text-center text-[11px] italic text-sky-200/65 sm:text-xs">
-                      &ldquo;{existingNote}&rdquo;
-                    </p>
+                  <div className="w-full min-w-0 sm:flex sm:min-w-0 sm:flex-1 sm:basis-0 sm:justify-center sm:self-center sm:px-3">
+                    <div className="max-sm:-mx-0.5 max-sm:overflow-x-auto max-sm:px-0.5 max-sm:pb-0.5 sm:overflow-visible">
+                      <p className="text-center text-[11px] italic text-sky-200/65 sm:text-xs max-sm:inline-block max-sm:whitespace-nowrap max-sm:text-left sm:[text-wrap:balance] sm:whitespace-normal">
+                        &ldquo;{existingNote}&rdquo;
+                      </p>
+                    </div>
                   </div>
                 ) : null}
               </div>
