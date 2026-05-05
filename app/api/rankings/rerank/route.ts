@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  displayScoresForOrderedList,
+  type BroadRating,
   normalizeBroadRating,
   scoreFromSentimentOrdinal,
   tierInsertInclusiveBounds,
@@ -12,6 +12,7 @@ import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 type RerankBody = {
   gameId: string;
+  broadRating?: BroadRating;
 };
 
 type RankedRow = {
@@ -40,6 +41,9 @@ export async function POST(request: Request) {
 
     const body = (await request.json()) as RerankBody;
     if (!body.gameId) return NextResponse.json({ error: "Missing gameId." }, { status: 400 });
+    if (!body.broadRating) {
+      return NextResponse.json({ error: "Missing broadRating." }, { status: 400 });
+    }
 
     const rankingsTable = ctx.mode === "user" ? "user_game_rankings" : "guest_game_rankings";
     const sessionsTable = ctx.mode === "user" ? "ranking_insert_sessions" : "guest_ranking_insert_sessions";
@@ -63,31 +67,26 @@ export async function POST(request: Request) {
     }
 
     const remaining = fullRanked.filter((row) => row.game_id !== body.gameId);
-    const br = normalizeBroadRating(target.broad_rating);
-
-    const { error: deleteError } = await ctx.client
-      .from(rankingsTable)
-      .delete()
-      .eq(ownerCol, ownerId)
-      .eq("list_scope", "global")
-      .eq("list_key", "all");
-    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    const br = normalizeBroadRating(body.broadRating);
 
     if (remaining.length === 0) {
-      const { error: singleInsertError } = await ctx.client.from(rankingsTable).insert({
-        ...ownerRow,
-        list_scope: "global",
-        list_key: "all",
-        game_id: target.game_id,
-        rank_position: 1,
-        score: scoreFromSentimentOrdinal(0, 1, target.broad_rating),
-        status: target.status ?? "played",
-        broad_rating: target.broad_rating ?? "fine",
-        notes: target.notes ?? null,
-        tags: target.tags ?? [],
-      });
-      if (singleInsertError) {
-        return NextResponse.json({ error: singleInsertError.message }, { status: 500 });
+      const { error: singleUpdateError } = await ctx.client
+        .from(rankingsTable)
+        .update({
+          rank_position: 1,
+          score: scoreFromSentimentOrdinal(0, 1, br),
+          status: target.status ?? "played",
+          broad_rating: br,
+          notes: target.notes ?? null,
+          tags: target.tags ?? [],
+          updated_at: new Date().toISOString(),
+        })
+        .eq(ownerCol, ownerId)
+        .eq("list_scope", "global")
+        .eq("list_key", "all")
+        .eq("game_id", target.game_id);
+      if (singleUpdateError) {
+        return NextResponse.json({ error: singleUpdateError.message }, { status: 500 });
       }
       return NextResponse.json({ status: "reranked_directly" });
     }
@@ -107,31 +106,13 @@ export async function POST(request: Request) {
       merged.splice(minG, 0, {
         game_id: target.game_id,
         status: target.status ?? "played",
-        broad_rating: target.broad_rating,
+        broad_rating: br,
         notes: target.notes,
         tags: target.tags ?? [],
       });
       await applyGlobalRankingOrder(ctx, merged);
       return NextResponse.json({ status: "reranked_directly" });
     }
-
-    const scores = displayScoresForOrderedList(remaining);
-    const rebuiltPayload = remaining.map((row, index) => ({
-      ...ownerRow,
-      list_scope: "global",
-      list_key: "all",
-      game_id: row.game_id,
-      rank_position: index + 1,
-      score: scores[index]!,
-      status: row.status ?? "played",
-      broad_rating: row.broad_rating ?? "fine",
-      notes: row.notes ?? null,
-      tags: row.tags ?? [],
-      updated_at: new Date().toISOString(),
-    }));
-
-    const { error: rebuildError } = await ctx.client.from(rankingsTable).insert(rebuiltPayload);
-    if (rebuildError) return NextResponse.json({ error: rebuildError.message }, { status: 500 });
 
     const { data: session, error: sessionError } = await ctx.client
       .from(sessionsTable)

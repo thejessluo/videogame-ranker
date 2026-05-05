@@ -223,13 +223,15 @@ async function insertAtGlobalIndex(
     notes: session.notes,
     tags: session.tags ?? [],
   };
-  const base: CompactRankRow[] = fullRanked.map((r) => ({
-    game_id: r.game_id,
-    status: r.status,
-    broad_rating: r.broad_rating,
-    notes: r.notes,
-    tags: r.tags ?? [],
-  }));
+  const base: CompactRankRow[] = fullRanked
+    .filter((r) => r.game_id !== session.game_id)
+    .map((r) => ({
+      game_id: r.game_id,
+      status: r.status,
+      broad_rating: r.broad_rating,
+      notes: r.notes,
+      tags: r.tags ?? [],
+    }));
   const finalList = [...base];
   finalList.splice(globalInsertIndex, 0, insertRow);
   await persistFinalRankingList(ctx, finalList);
@@ -270,6 +272,18 @@ async function completeSession(ctx: RankingDbCtx, sessionId: string) {
     .eq("id", sessionId);
 }
 
+async function getSessionComparisonCount(ctx: RankingDbCtx, sessionId: string) {
+  const t = tables(ctx);
+  const ownerFilter = ctx.mode === "user" ? { user_id: ctx.userId } : { guest_id: ctx.guestId };
+  const { count, error } = await ctx.client
+    .from(t.comparisons)
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+    .match(ownerFilter);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 async function getRankedGames(ctx: RankingDbCtx) {
   const t = tables(ctx);
   const { data, error } = await ctx.client
@@ -292,29 +306,17 @@ async function getRankedGames(ctx: RankingDbCtx) {
  */
 export async function rankGloballyFromPendingSession(ctx: RankingDbCtx, sessionId: string) {
   const session = await getSession(ctx, sessionId);
-  const t = tables(ctx);
-
-  const { data: existing } = await ctx.client
-    .from(t.rankings)
-    .select("id")
-    .eq(t.ownerCol, t.ownerId)
-    .eq("list_scope", "global")
-    .eq("list_key", "all")
-    .eq("game_id", session.game_id)
-    .maybeSingle();
-  if (existing) {
-    await completeSession(ctx, session.id);
-    return;
-  }
 
   const fullRanked = await getRankedGames(ctx);
-  const rankedForInsert = fullRanked.map((row) => ({
-    game_id: row.game_id,
-    status: row.status,
-    broad_rating: row.broad_rating,
-    notes: row.notes,
-    tags: row.tags ?? [],
-  }));
+  const rankedForInsert = fullRanked
+    .filter((row) => row.game_id !== session.game_id)
+    .map((row) => ({
+      game_id: row.game_id,
+      status: row.status,
+      broad_rating: row.broad_rating,
+      notes: row.notes,
+      tags: row.tags ?? [],
+    }));
 
   const br = normalizeBroadRating(session.broad_rating);
   const { minG, maxG } = tierInsertInclusiveBounds(rankedForInsert, br);
@@ -348,8 +350,13 @@ async function insertAtResolvedPosition(
   comparable: RankedRow[],
   comparableInsertAt: number,
 ) {
-  const globalInsertAt = resolveGlobalInsertIndex(comparable, comparableInsertAt, fullRanked);
-  const base: CompactRankRow[] = fullRanked.map((r) => ({
+  const fullWithoutSessionGame = fullRanked.filter((r) => r.game_id !== session.game_id);
+  const globalInsertAt = resolveGlobalInsertIndex(
+    comparable,
+    comparableInsertAt,
+    fullWithoutSessionGame,
+  );
+  const base: CompactRankRow[] = fullWithoutSessionGame.map((r) => ({
     game_id: r.game_id,
     status: r.status,
     broad_rating: r.broad_rating,
@@ -374,8 +381,9 @@ export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string)
   if (session.completed) return { status: "done" as const };
 
   const fullRanked = await getRankedGames(ctx);
+  const rankedWithoutSessionGame = fullRanked.filter((row) => row.game_id !== session.game_id);
   const newGame = normalizeGame(session.new_game);
-  const comparable = getComparableRankedGames(fullRanked, newGame);
+  const comparable = getComparableRankedGames(rankedWithoutSessionGame, newGame);
 
   if (comparable.length === 0) {
     await rankGloballyFromPendingSession(ctx, sessionId);
@@ -383,7 +391,7 @@ export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string)
   }
 
   const br = normalizeBroadRating(session.broad_rating);
-  const { minG, maxG } = tierInsertInclusiveBounds(fullRanked, br);
+  const { minG, maxG } = tierInsertInclusiveBounds(rankedWithoutSessionGame, br);
 
   if (minG > maxG) {
     await rankGloballyFromPendingSession(ctx, sessionId);
@@ -396,7 +404,7 @@ export async function runRankingSessionGet(ctx: RankingDbCtx, sessionId: string)
     return { status: "done" as const };
   }
 
-  const tierComparable = buildTierComparableSlice(fullRanked, br, minG, maxG);
+  const tierComparable = buildTierComparableSlice(rankedWithoutSessionGame, br, minG, maxG);
 
   if (tierComparable.length === 0) {
     await insertAtGlobalIndex(ctx, session, fullRanked, minG);
@@ -454,15 +462,95 @@ export async function runRankingSessionPost(ctx: RankingDbCtx, body: AnswerBody)
   const t = tables(ctx);
   const session = await getSession(ctx, body.sessionId);
   const fullRanked = await getRankedGames(ctx);
+  const rankedWithoutSessionGame = fullRanked.filter((row) => row.game_id !== session.game_id);
   const newGame = normalizeGame(session.new_game);
-  const comparable = getComparableRankedGames(fullRanked, newGame);
+  const comparable = getComparableRankedGames(rankedWithoutSessionGame, newGame);
 
   if (body.preferred === "skip") {
-    await completeSession(ctx, session.id);
-    return {
-      status: "skipped" as const,
-      message: "Skipped comparison. Game was not auto-placed.",
-    };
+    if (!session.completed && comparable.length > 0) {
+      const br = normalizeBroadRating(session.broad_rating);
+      const { minG, maxG } = tierInsertInclusiveBounds(rankedWithoutSessionGame, br);
+
+      if (minG > maxG) {
+        const comparedCount = await getSessionComparisonCount(ctx, session.id);
+        if (comparedCount === 0) {
+          await completeSession(ctx, session.id);
+          return {
+            status: "skipped" as const,
+            message: "Skipped comparison. Game was not auto-placed.",
+          };
+        }
+        await rankGloballyFromPendingSession(ctx, body.sessionId);
+        return { status: "done" as const };
+      }
+
+      if (minG === maxG) {
+        await insertAtGlobalIndex(ctx, session, fullRanked, minG);
+        await completeSession(ctx, session.id);
+        return { status: "done" as const };
+      }
+
+      const tierComparable = buildTierComparableSlice(rankedWithoutSessionGame, br, minG, maxG);
+      if (tierComparable.length === 0) {
+        await insertAtGlobalIndex(ctx, session, fullRanked, minG);
+        await completeSession(ctx, session.id);
+        return { status: "done" as const };
+      }
+
+      const bounds = clampBounds(session.low, session.high, tierComparable.length);
+      if (bounds.low > bounds.high) {
+        const comparedCount = await getSessionComparisonCount(ctx, session.id);
+        if (comparedCount === 0) {
+          await completeSession(ctx, session.id);
+          return {
+            status: "skipped" as const,
+            message: "Skipped comparison. Game was not auto-placed.",
+          };
+        }
+        await insertAtResolvedPosition(ctx, session, fullRanked, tierComparable, bounds.low);
+        await completeSession(ctx, session.id);
+        return { status: "done" as const };
+      }
+
+      const mid = midpoint(bounds.low, bounds.high);
+      const tryRightLow = mid + 1;
+      const tryRightHigh = bounds.high;
+      if (tryRightLow <= tryRightHigh) {
+        await saveBounds(ctx, session.id, tryRightLow, tryRightHigh);
+        return { status: "continue" as const };
+      }
+
+      const tryLeftLow = bounds.low;
+      const tryLeftHigh = mid - 1;
+      if (tryLeftLow <= tryLeftHigh) {
+        await saveBounds(ctx, session.id, tryLeftLow, tryLeftHigh);
+        return { status: "continue" as const };
+      }
+
+      const comparedCount = await getSessionComparisonCount(ctx, session.id);
+      if (comparedCount === 0) {
+        await completeSession(ctx, session.id);
+        return {
+          status: "skipped" as const,
+          message: "Skipped comparison. Game was not auto-placed.",
+        };
+      }
+
+      await insertAtResolvedPosition(ctx, session, fullRanked, tierComparable, bounds.low);
+      await completeSession(ctx, session.id);
+      return { status: "done" as const };
+    }
+
+    const comparedCount = await getSessionComparisonCount(ctx, session.id);
+    if (comparedCount === 0) {
+      await completeSession(ctx, session.id);
+      return {
+        status: "skipped" as const,
+        message: "Skipped comparison. Game was not auto-placed.",
+      };
+    }
+    await rankGloballyFromPendingSession(ctx, body.sessionId);
+    return { status: "done" as const };
   }
 
   if (!session.completed && comparable.length === 0) {
@@ -472,7 +560,7 @@ export async function runRankingSessionPost(ctx: RankingDbCtx, body: AnswerBody)
 
   if (!session.completed && comparable.length > 0) {
     const br = normalizeBroadRating(session.broad_rating);
-    const { minG, maxG } = tierInsertInclusiveBounds(fullRanked, br);
+    const { minG, maxG } = tierInsertInclusiveBounds(rankedWithoutSessionGame, br);
 
     if (minG > maxG) {
       await rankGloballyFromPendingSession(ctx, body.sessionId);
@@ -485,7 +573,7 @@ export async function runRankingSessionPost(ctx: RankingDbCtx, body: AnswerBody)
       return { status: "done" as const };
     }
 
-    const tierComparable = buildTierComparableSlice(fullRanked, br, minG, maxG);
+    const tierComparable = buildTierComparableSlice(rankedWithoutSessionGame, br, minG, maxG);
 
     if (tierComparable.length === 0) {
       await insertAtGlobalIndex(ctx, session, fullRanked, minG);

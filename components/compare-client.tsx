@@ -224,7 +224,7 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
                 }));
               }}
             >
-              Rank globally anyway
+              Rank anyway
             </button>
             <button
               className="btn btn-secondary"
@@ -261,12 +261,18 @@ export function CompareClient({ sessionId }: { sessionId: string }) {
                 }));
               }}
             >
-              Save unranked for later
+              Save for later
             </button>
           </div>
         ) : null}
-        <Link href="/rankings" className="btn btn-primary inline-flex">
-          View ranking
+        <Link
+          href="/rankings"
+          className="group inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent)] underline-offset-[5px] decoration-[var(--accent)]/50 hover:underline"
+        >
+          View your rankings
+          <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-0.5">
+            →
+          </span>
         </Link>
       </div>
     );
